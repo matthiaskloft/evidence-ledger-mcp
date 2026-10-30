@@ -1,21 +1,26 @@
 """Check that nothing private gets published.
 
     python tools/check_public.py           # tracked files (CI)
-    python tools/check_public.py --staged  # staged files, plus quotes from the private ledger (pre-commit)
+    python tools/check_public.py --staged  # staged files, plus private ledger quotes (pre-commit)
 
 Fails when a tracked or staged file
 - lies under ledger/ (the private ledgers),
 - is YAML or JSON with quote, quote_prefix or quote_suffix fields,
 - contains an email address other than a noreply address,
-- (--staged only) contains a quote, prefix or suffix from ledger/*.yaml, compared after normalization n1.
+- (--staged only) contains a quote, prefix or suffix from ledger/*.yaml, compared after
+  normalization n1.
 Findings name the file and record, never the quoted text.
 """
+
+from __future__ import annotations
+
 import glob
 import json
 import re
 import subprocess
 import sys
 import unicodedata
+from typing import Any
 
 try:
     import yaml
@@ -29,16 +34,16 @@ QUOTE_FIELD = re.compile(r"""(?<![\w-])["']?(quote|quote_prefix|quote_suffix)["'
 MIN_QUOTE_CHARS = 20  # normalized length; shorter text would match by chance
 
 
-def normalize(text):
+def normalize(text: str) -> str:
     text = unicodedata.normalize("NFKC", text).casefold()
     return "".join(ch for ch in text if ch.isalnum())
 
 
-def git(*args):
+def git(*args: str) -> bytes:
     return subprocess.run(["git", *args], capture_output=True, check=True).stdout
 
 
-def files(staged):
+def files(staged: bool) -> list[str]:
     if staged:
         names = git("diff", "--cached", "--name-only", "--diff-filter=ACMR", "-z")
     else:
@@ -46,12 +51,16 @@ def files(staged):
     return [n for n in names.decode("utf-8").split("\0") if n]
 
 
-def content(path, staged):
-    raw = git("show", f":{path}") if staged else open(path, "rb").read()
+def content(path: str, staged: bool) -> str:
+    if staged:
+        raw = git("show", f":{path}")
+    else:
+        with open(path, "rb") as f:
+            raw = f.read()
     return raw.decode("utf-8", errors="ignore")
 
 
-def has_quote_keys(node):
+def has_quote_keys(node: object) -> bool:
     if isinstance(node, dict):
         return any(k in QUOTE_KEYS or has_quote_keys(v) for k, v in node.items())
     if isinstance(node, list):
@@ -59,7 +68,7 @@ def has_quote_keys(node):
     return False
 
 
-def has_quote_fields(text):
+def has_quote_fields(text: str) -> bool:
     # Parse so that compact JSON and flow-style YAML are caught; fall back to a
     # pattern when the file does not parse.
     try:
@@ -69,12 +78,12 @@ def has_quote_fields(text):
     return any(has_quote_keys(d) for d in docs)
 
 
-def ledger_quotes():
-    quotes = []
+def ledger_quotes() -> list[tuple[str, str]]:
+    quotes: list[tuple[str, str]] = []
     for path in sorted(glob.glob("ledger/*.yaml") + glob.glob("ledger/*.jsonl")):
         with open(path, encoding="utf-8") as f:
             if path.endswith(".jsonl"):
-                records = [json.loads(line) for line in f if line.strip()]
+                records: Any = [json.loads(line) for line in f if line.strip()]
             else:
                 records = yaml.safe_load(f) or []
             if isinstance(records, dict):  # {"ledger": header, "records": [...]}
@@ -89,16 +98,17 @@ def ledger_quotes():
     return quotes
 
 
-def main():
+def main() -> int:
     staged = "--staged" in sys.argv[1:]
     quotes = ledger_quotes() if staged else []
-    problems = []
+    problems: list[str] = []
     for path in files(staged):
         if path.replace("\\", "/").startswith("ledger/"):
             problems.append(f"{path}: private ledger file")
             continue
         text = content(path, staged)
-        is_data = path.endswith((".yaml", ".yml", ".json", ".jsonl")) and not path.endswith(".schema.json")
+        is_data = path.endswith((".yaml", ".yml", ".json", ".jsonl"))
+        is_data = is_data and not path.endswith(".schema.json")
         if is_data and has_quote_fields(text):
             problems.append(f"{path}: has quote fields; publish only masked or locator exports")
         for email in sorted(set(EMAIL.findall(text))):
@@ -113,7 +123,10 @@ def main():
     for p in problems:
         print(p, file=sys.stderr)
     if problems:
-        print(f"check_public: {len(problems)} problem(s); nothing private may be published", file=sys.stderr)
+        print(
+            f"check_public: {len(problems)} problem(s); nothing private may be published",
+            file=sys.stderr,
+        )
     return 1 if problems else 0
 
 

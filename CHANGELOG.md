@@ -4,6 +4,10 @@ Changes to the MCP server package `evidence-ledger-mcp`. Schema changes are rele
 
 ## [Unreleased]
 
+### Changed
+
+- Move canonical schema development and future schema releases to `evidence-ledger-schema`. Keep a pinned vendored schema for offline builds and validation, with its upstream revision and file hashes recorded in `schema/UPSTREAM.json`. Original schema tags remain historical records.
+
 ## [0.1.0] - 2026-10-30
 
 ### Added

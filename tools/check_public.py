@@ -76,7 +76,11 @@ def ledger_quotes():
                 records = [json.loads(line) for line in f if line.strip()]
             else:
                 records = yaml.safe_load(f) or []
+            if isinstance(records, dict):  # {"ledger": header, "records": [...]}
+                records = records.get("records") or []
             for rec in records:
+                if "ledger" in rec:  # JSON Lines header line
+                    continue
                 for field in ("quote", "quote_prefix", "quote_suffix"):
                     norm = normalize(rec.get(field) or "")
                     if len(norm) >= MIN_QUOTE_CHARS:

@@ -7,7 +7,7 @@ from typing import Any, Literal
 
 from mcp.server.fastmcp import FastMCP
 
-from evidence_ledger_mcp import export, ledger, summary
+from evidence_ledger_mcp import embed, export, ledger, summary
 from evidence_ledger_mcp.schema import record_errors, schema_version
 
 mcp = FastMCP(
@@ -110,6 +110,29 @@ def summarize_ledger(
     `full` summary holds whole quotes: keep it private. For a PDF, print the HTML from a
     browser; its print style shows link targets and avoids splitting records where possible."""
     return summary.summarize_ledger(path, out, level, include_withdrawn)
+
+
+@mcp.tool()
+def embed_ledger(
+    path: str,
+    work: str,
+    out: str,
+    level: Literal["full", "masked", "locator"] = "full",
+    layout: Literal["endnotes", "panel"] = "endnotes",
+    include_withdrawn: bool = False,
+) -> Record:
+    """Write a copy of the work's HTML (`work`, rendered by Quarto, Pandoc or any tool) with each
+    claim's anchor marked and linked to its evidence, to a new file. Both layouts end with an
+    "Evidence" section holding one card per claim; `panel` also opens the clicked claim's card in a
+    side panel (a bottom sheet on narrow screens); if no anchor is located, `panel` falls back to
+    `endnotes` and the result's `layout` says so.
+    Anchors that are only a marker, not found in the text or overlapping another claim's marked
+    text are listed under "Not located in the work" and returned in `not_located` (`overlapping`
+    maps a claim to the one it overlaps); a record key links to `#ref-<key>` when the work has
+    that bibliography entry. Levels and the publication check work as in `summarize_ledger`, and
+    `out` is never overwritten and must be in the work's folder. A `full` result holds whole
+    quotes: keep it private."""
+    return embed.embed_ledger(path, work, out, level, layout, include_withdrawn)
 
 
 def main() -> None:

@@ -27,6 +27,8 @@ Every export is produced at one of the levels `full`, `masked` or `locator`, and
 
 ## 0.4: embedded rendering
 
+Status: the HTML part is implemented (`embed_ledger`); PDF/LaTeX output is still planned.
+
 - The work itself, with each backed claim linked to its evidence. Standard formats are HTML (interactive) and PDF. The server supplies the claim data and the filters or packages a document toolchain needs (Pandoc/Quarto, LaTeX); it does not bundle that toolchain.
 - Links from each record's `key` to the work's bibliography.
 

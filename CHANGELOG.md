@@ -4,6 +4,10 @@ Changes to the MCP server package `evidence-ledger-mcp`. Schema changes are rele
 
 ## [Unreleased]
 
+### Added
+
+- Embedded rendering, HTML part (roadmap 0.4): `embed_ledger` writes a copy of the work's HTML in which each claim's anchor text is marked and linked to an evidence card, as `endnotes` (an Evidence section at the end) or `panel` (the same end section plus, with JavaScript, a side panel that opens the clicked claim's card: a sidebar with the first claim open on wide screens, a bottom sheet on narrow ones; it falls back to `endnotes`, reported in `layout`, when no anchor is located). The output sets its own page-wide light/dark theme and adds a hint line, claim-ID superscripts and the end section. Anchors are matched after normalising typography and preferring word boundaries; unlocated anchors, including those overlapping another claim (`overlapping`), are listed without work text at the masked and locator levels; record keys link to `#ref-<key>` bibliography entries when the work has them. Levels and the publication check work as in `summarize_ledger`; an existing file is never overwritten.
+
 ### Changed
 
 - Move canonical schema development and future schema releases to `evidence-ledger-schema`. Keep a pinned vendored schema for offline builds and validation, with its upstream revision and file hashes recorded in `schema/UPSTREAM.json`. Original schema tags remain historical records.

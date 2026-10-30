@@ -4,7 +4,6 @@
 
 This repository holds two separate contributions:
 
-1. **The evidence ledger schema** (`schema/`): a format for structured records that make every citation in a manuscript checkable. It stands on its own: any tool or agent can write and check ledgers with it, without our server. Status: draft v0.2.0, may still change in breaking ways.
 2. **The evidence ledger MCP server** (`src/`, Python package `evidence-ledger-mcp`): a tool through which agents write and check ledgers that follow the schema. Status: stub; it only reports the schema version and validates single records.
 
 The two have separate version numbers. Schema releases are tagged `schema-vX.Y.Z`; the server will state which schema versions it supports. The schema will move to a repository of its own before v1.0.
@@ -13,20 +12,30 @@ No licence has been chosen yet, so all rights are reserved for now.
 
 ## Purpose
 
-When an LLM agent or a person adds a citation, the ledger records what is claimed, which source backs it, where in the source, a short quote, and why the citation is needed. Co-authors, scripts or a second model can then check each citation against its source later, whichever tool wrote the manuscript. The idea follows Moravcsik's *active citation* (2014): contestable claims come with the evidence that supports them.
+When an LLM agent or a person adds a citation, the ledger records what is claimed, which source backs it, where in the source, a short quote, and why the citation is needed. Co-authors, scripts or a second model can then check each citation against its source later, whichever tool wrote the work. The idea follows Moravcsik's *active citation* (2014): contestable claims come with the evidence that supports them.
 
 ## The schema
 
-[`schema/evidence-ledger.schema.json`](schema/evidence-ledger.schema.json) (JSON Schema 2020-12) describes one record. A ledger is a list of records, kept as YAML or JSON next to the manuscript.
+[`schema/evidence-ledger.schema.json`](schema/evidence-ledger.schema.json) (JSON Schema 2020-12) describes one record and, in `$defs/header`, the ledger header. A ledger is a list of records, kept next to the work it covers.
+
+**Header.** A ledger can start with a header that records `schema_version`, the `work` it covers (`title`, `type`: `manuscript`, `software`, `dataset` or `other`, and an optional `location`), and optional `description`, `created` and `notes`. The ledger file then takes one of these shapes:
+
+- JSON or YAML: an object `{"ledger": <header>, "records": [<record>, ...]}`.
+- JSON Lines: the first line is `{"ledger": <header>}`; every following line is one record.
+- A plain list of records, without header, stays valid.
+
+**File format.** The schema is format-neutral: it validates parsed records, so a ledger can be JSON, JSON Lines or YAML. The MCP server will store ledgers as JSON Lines (`.jsonl`, one record per line), because new records are appended as single lines, concurrent additions rarely conflict, and agents write JSON reliably. YAML is accepted for records written by hand and as a readable export; quote dates in YAML (`date: "2026-10-30"`), since unquoted dates are not read as text.
 
 Each record contains:
 
-- **Claim:** `claim`, `claim_id` (records backing the same claim share it), `claim_type`, and an `anchor` that finds the claim in the manuscript (an ID marker, or the exact text).
+- **Claim:** `claim`, `claim_id` (records backing the same claim share it), `claim_type`, and an `anchor` that finds the claim in the work (an ID marker, or the exact text).
 - **Source:** a citation `key`, and a `doi`, `isbn` or `url` (or `no_identifier_reason`).
-- **Evidence:** `locator` (page, section, figure or table), `quote`, `quote_hash`, `relation` (`supports`, `partially_supports`, `background`, `method`, `contrasts`) and a `justification`.
+- **Evidence:** `locator` (page, section, figure or table), `quote`, `quote_hash`, `relation` (`supports`, `partially_supports`, `background`, `method`, `contrasts`), a `justification` and an optional `note`.
 - **Provenance:** who wrote the record (person or agent, and which model) and when.
 
 Every claim counts as `contestable` by default and then needs locator, quote, hash and justification. Marking a claim as not contestable needs a `contestable_reason`. Evidence that contradicts a claim is recorded with `relation: contrasts`, not dropped.
+
+`note` (per record) and `notes` (in the header) are free-text comments, the JSON counterpart of comments in a YAML file. They are exported with the ledger, so they must never contain source text; quotes belong only in `quote`, `quote_prefix` and `quote_suffix`.
 
 `quote_hash` is `sha256-n1:` plus the SHA-256 of the quote after normalization n1: Unicode NFKC, casefold, keep only letters and digits. The hash then survives differences between copies of a source, such as whitespace, hyphenation and quote styles.
 

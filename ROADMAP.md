@@ -34,6 +34,8 @@ Status: the HTML part is implemented (`embed_ledger`); PDF/LaTeX output is still
 
 ## 0.5: checks
 
+Status: drift, the quote re-check against agent-supplied text and the gap report are implemented in `check_ledger`; fetching a public URL is still planned.
+
 - Check that each anchor still appears in the work, and flag records assessed against an earlier revision of it.
 - Re-check quotes against source text passed in by the agent or fetched from a public URL.
 - A gap report: contestable claims without locator, quote or justification, claims without records, and citation keys missing from the bibliography.

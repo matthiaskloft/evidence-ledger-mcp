@@ -7,7 +7,7 @@ from typing import Any, Literal
 
 from mcp.server.fastmcp import FastMCP
 
-from evidence_ledger_mcp import embed, export, ledger, summary
+from evidence_ledger_mcp import checks, embed, export, ledger, summary
 from evidence_ledger_mcp.schema import record_errors, schema_version
 
 mcp = FastMCP(
@@ -133,6 +133,29 @@ def embed_ledger(
     `out` is never overwritten and must be in the work's folder. A `full` result holds whole
     quotes: keep it private."""
     return embed.embed_ledger(path, work, out, level, layout, include_withdrawn)
+
+
+@mcp.tool()
+def check_ledger(
+    path: str,
+    work: str | None = None,
+    revision: str | None = None,
+    bibliography: str | None = None,
+    sources: dict[str, str] | None = None,
+    include_withdrawn: bool = False,
+) -> Record:
+    """Check a ledger without changing anything; the result holds record and claim ids, keys and
+    counts, never quote or source text. `gaps` is always returned: contestable records lacking a
+    locator, quote or justification, claims whose records are all withdrawn, and, when a
+    bibliography is known, record keys missing from it. Optional checks, each returned only when
+    its input is given: `work` reports anchors not found in it, or with only a marker, under
+    `anchors` (HTML is matched on its visible text; other files on their source text, so markup
+    inside an anchor reports not found: prefer the rendered HTML); `revision` lists records assessed
+    against another or an unknown `provenance.manuscript_rev`; `sources` maps a record `key` to the
+    source's full text and re-checks each quote against it (`matched`, `not_found`, `no_source`).
+    `bibliography` is a .bib or CSL JSON file; for an HTML `work` without one, its `ref-<key>`
+    entries serve. Withdrawn records are skipped unless `include_withdrawn`."""
+    return checks.check_ledger(path, work, revision, bibliography, sources, include_withdrawn)
 
 
 def main() -> None:

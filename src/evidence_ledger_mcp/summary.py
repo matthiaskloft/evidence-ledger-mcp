@@ -190,14 +190,17 @@ def _record(record: Record) -> str:
 
 def _anchor(anchor: object) -> str:
     """The claim as it stands in the work, its exact words marked within their context."""
-    if not isinstance(anchor, dict) or "exact" not in anchor:
+    if not isinstance(anchor, dict):
         return ""
+    marker = _prose("note", "Marker", anchor.get("marker"))
+    if "exact" not in anchor:
+        return marker
     text = (
         _e(anchor.get("prefix", ""))
         + f"<mark>{_e(anchor['exact'])}</mark>"
         + _e(anchor.get("suffix", ""))
     )
-    return f'<p class="label">In the work</p><p class="anchor">{text}</p>'
+    return f'<p class="label">In the work</p>{marker}<p class="anchor">{text}</p>'
 
 
 def _claim(claim_id: str, records: list[Record]) -> str:
@@ -209,10 +212,6 @@ def _claim(claim_id: str, records: list[Record]) -> str:
             ("type", _e(first.get("claim_type", ""))),
             ("importance", _e(first.get("importance", ""))),
             ("contestable", "" if contestable is None else ("yes" if contestable else "no")),
-            (
-                "marker",
-                _e(anchor["marker"]) if isinstance(anchor, dict) and "marker" in anchor else "",
-            ),
         ]
     )
     n = len(records)
@@ -220,7 +219,11 @@ def _claim(claim_id: str, records: list[Record]) -> str:
     body = ""
     for record in records:
         differences = "".join(
-            _prose("note", field.replace("_", " ").capitalize(), record[field])
+            _prose(
+                "note",
+                field.replace("_", " ").capitalize(),
+                ("yes" if record[field] else "no") if field == "contestable" else record[field],
+            )
             for field in ("claim", "claim_type", "contestable")
             if field in record and record.get(field) != first.get(field)
         )

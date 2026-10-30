@@ -2,22 +2,23 @@
 
 > **Under active development.** Both the schema and the server may change in breaking ways between versions until v1.0. Pin the version you use.
 
-This repository holds two separate contributions:
+An MCP server through which agents create, append to, search, validate and withdraw records in JSON Lines evidence ledgers, export them at full, masked or locator levels, and generate printable HTML summaries. Source and anchor checks are planned.
 
-1. **The evidence ledger schema** (`schema/`): a format for structured records that make every citation in a work (a manuscript, software or other) checkable. It stands on its own: any tool or agent can write and check ledgers with it, without our server. Status: draft v0.4.0, may still change in breaking ways.
-2. **The evidence ledger MCP server** (`src/`, Python package `evidence-ledger-mcp`): a tool through which agents write and check ledgers that follow the schema. Status: early; it creates, appends to, searches, validates and withdraws records in JSON Lines ledgers (roadmap 0.1) and exports them at the levels full, masked or locator (roadmap 0.2), and writes an HTML summary grouped by claim that prints to PDF (roadmap 0.3). Checks are planned.
+**Server: [v0.1.0 on PyPI](https://pypi.org/project/evidence-ledger-mcp/0.1.0/) · [server release](https://github.com/matthiaskloft/evidence-ledger-mcp/releases/tag/v0.1.0).**
 
-The two have separate version numbers. Schema releases are tagged `schema-vX.Y.Z`; the server currently supports schema v0.4.0 and reports it through `schema_info`. The schema will move to a repository of its own before v1.0.
+**Supported schema: [v0.4.0](https://github.com/matthiaskloft/evidence-ledger-schema/releases/tag/schema-v0.4.0) · [standalone schema repository](https://github.com/matthiaskloft/evidence-ledger-schema).**
 
-The evidence ledger schema in `schema/` is licensed under Creative Commons Attribution 4.0 International (CC BY 4.0); see [schema/LICENSE](schema/LICENSE). Attribution: Matthias Kloft. This licence applies to the schema, not to ledger contents or third-party source material. The MCP server and its associated documentation are licensed under the MIT licence; see [LICENSE](LICENSE). The schema retains its separate CC BY 4.0 licence, including the copy bundled with the server.
+The schema and server have independent versions, repositories and releases. This server vendors an exact schema revision in `schema/`; [schema/UPSTREAM.json](schema/UPSTREAM.json) records the upstream commit and file hashes. Builds and runtime validation do not fetch the schema. Original `schema-v*` releases here remain historical records; future schema releases belong in the schema repository.
+
+The MCP server and its associated documentation use the [MIT licence](LICENSE). The bundled schema uses [CC BY 4.0](schema/LICENSE), with attribution to Matthias Kloft. These licences do not cover ledger contents or third-party source material.
 
 ## Purpose
 
 When an LLM agent or a person adds a citation, the ledger records what is claimed, which source backs it, where in the source, a short quote, and why the citation is needed. Co-authors, scripts or a second model can then check each citation against its source later, whichever tool wrote the work. The idea follows Moravcsik's *active citation* (2014): contestable claims come with the evidence that supports them.
 
-## The schema
+## The bundled schema
 
-[`schema/evidence-ledger.schema.json`](schema/evidence-ledger.schema.json) (JSON Schema 2020-12) describes one record and, in `$defs/header`, the ledger header. A ledger is a list of records, kept next to the work it covers.
+The pinned copy of [`schema/evidence-ledger.schema.json`](schema/evidence-ledger.schema.json) (JSON Schema 2020-12) describes one record and, in `$defs/header`, the ledger header. A ledger is a list of records, kept next to the work it covers.
 
 **Header.** A ledger can start with a header that records `schema_version`, the `work` it covers (`title`, `type`: `manuscript`, `software`, `dataset` or `other`, and an optional `location`), and optional `description`, `created` and `notes`. The ledger file then takes one of these shapes:
 

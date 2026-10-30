@@ -1,6 +1,6 @@
 # Roadmap
 
-Plans for the evidence ledger MCP server. They describe intentions, not commitments, and may change; there are no dates. Schema changes are planned separately and released under `schema-vX.Y.Z` tags.
+Plans for the evidence ledger MCP server. They describe intentions, not commitments, and may change; there are no dates. Schema changes are planned and released separately in [evidence-ledger-schema](https://github.com/matthiaskloft/evidence-ledger-schema).
 
 The server works on its own: it does not depend on other MCP servers or on a particular reference manager. For the planned source checks, agents will pass in source text, or the server will fetch a public URL itself.
 

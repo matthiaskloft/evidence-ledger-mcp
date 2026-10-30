@@ -1,3 +1,6 @@
+import hashlib
+import json
+from pathlib import Path
 from typing import Any
 
 from jsonschema import Draft202012Validator
@@ -45,3 +48,13 @@ def test_tools_wrap_the_schema_module() -> None:
 
 def test_focus_requires_quote() -> None:
     assert any("quote" in error for error in record_errors({**RECORD, "quote_focus": "phrase"}))
+
+
+def test_vendored_schema_matches_pin() -> None:
+    directory = Path(__file__).resolve().parents[1] / "schema"
+    pin = json.loads((directory / "UPSTREAM.json").read_text(encoding="utf-8"))
+    assert pin["version"] == schema_version()
+    assert pin["tag"] == f"schema-v{pin['version']}"
+    assert len(pin["revision"]) == 40
+    for name, expected in pin["files"].items():
+        assert hashlib.sha256((directory / name).read_bytes()).hexdigest() == expected, name

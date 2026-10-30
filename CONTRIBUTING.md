@@ -1,6 +1,6 @@
 # Contributing
 
-Thank you for your interest in the evidence ledger schema and MCP server.
+Thank you for your interest in the evidence ledger MCP server. Schema changes belong in [evidence-ledger-schema](https://github.com/matthiaskloft/evidence-ledger-schema); this repository vendors a pinned schema release.
 
 ## Issues
 

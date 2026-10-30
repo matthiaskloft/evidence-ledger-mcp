@@ -1,8 +1,12 @@
 # Changelog
 
-Changes to the MCP server package `evidence-ledger-mcp`. Schema changes are released separately under `schema-vX.Y.Z` tags. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
+Changes to the MCP server package `evidence-ledger-mcp`. Schema changes are released separately in [evidence-ledger-schema](https://github.com/matthiaskloft/evidence-ledger-schema). Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
+
+### Changed
+
+- Move canonical schema development and future schema releases to `evidence-ledger-schema`. Keep a pinned vendored schema for offline builds and validation, with its upstream revision and file hashes recorded in `schema/UPSTREAM.json`. Original schema tags remain historical records.
 
 ## [0.1.0] - 2026-10-30
 

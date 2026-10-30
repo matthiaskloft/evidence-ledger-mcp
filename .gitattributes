@@ -1,0 +1,2 @@
+# Keep pinned upstream bytes stable across Windows and Unix checkouts.
+schema/* text eol=lf

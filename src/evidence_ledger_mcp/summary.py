@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from html import escape
 from pathlib import Path
 from typing import Any
@@ -139,16 +140,19 @@ def _prose(cls: str, label: str, value: object) -> str:
     return f'<p class="{cls}"><b>{label}:</b> {_e(value)}</p>' if value else ""
 
 
-def _record(record: Record) -> str:
+def _record(record: Record, key_href: str | None = None) -> str:
     relation = str(record.get("relation", ""))
     badge = (
         f'<span class="relation rel-{_e(relation)}">{_e(relation.replace("_", " "))}</span>'
         if relation
         else ""
     )
+    key = _e(record.get("key", ""))
+    if key_href is not None:
+        key = f'<a href="{_e(key_href)}">{key}</a>'
     head = (
         f'<div class="record-head"><span class="id">{_e(record.get("id", ""))}</span>'
-        f'<span class="key">{_e(record.get("key", ""))}</span>{badge}</div>'
+        f'<span class="key">{key}</span>{badge}</div>'
     )
     gone = (
         f'<p class="withdrawn">withdrawn: {_e(record["withdrawn"])}</p>'
@@ -203,9 +207,24 @@ def _anchor(anchor: object) -> str:
     return f'<p class="label">In the work</p>{marker}<p class="anchor">{text}</p>'
 
 
-def _claim(claim_id: str, records: list[Record]) -> str:
+_UNMARKED: object = object()
+
+
+def _claim_parts(
+    claim_id: str,
+    records: list[Record],
+    key_hrefs: dict[str, str] | None = None,
+    anchor_html: Callable[[object], str] = _anchor,
+    marked: object = _UNMARKED,
+) -> tuple[str, str]:
+    """The claim part and the evidence part of a claim's card, as HTML.
+
+    With `marked`, the claim's anchor is highlighted in the work itself: the claim part shows no
+    anchor and a record's anchor is shown only when it differs from the marked one."""
+    in_text = marked is not _UNMARKED
     first = records[0]
     anchor = first.get("anchor")
+    reference = marked if in_text else anchor
     contestable = first.get("contestable")
     meta = _meta(
         [
@@ -227,14 +246,22 @@ def _claim(claim_id: str, records: list[Record]) -> str:
             for field in ("claim", "claim_type", "contestable")
             if field in record and record.get(field) != first.get(field)
         )
-        if record.get("anchor") != anchor:
-            differences += _anchor(record.get("anchor"))
-        body += differences + _record(record)
+        if record.get("anchor") != reference:
+            differences += anchor_html(record.get("anchor"))
+        href = (key_hrefs or {}).get(str(record.get("key", "")))
+        body += differences + _record(record, href)
+    head = (
+        f'<p class="claim-text"><span class="id">{_e(claim_id)}</span>'
+        f"{_e(first.get('claim', ''))}</p>{'' if in_text else anchor_html(anchor)}{meta}"
+    )
+    return head, f"{label}{body}"
+
+
+def _claim(claim_id: str, records: list[Record]) -> str:
+    head, evidence = _claim_parts(claim_id, records)
     return (
-        f'<section class="claim"><div class="claim-part"><p class="claim-text">'
-        f'<span class="id">{_e(claim_id)}</span>{_e(first.get("claim", ""))}</p>'
-        f"{_anchor(anchor)}{meta}"
-        f'</div><div class="evidence">{label}{body}</div></section>'
+        f'<section class="claim"><div class="claim-part">{head}</div>'
+        f'<div class="evidence">{evidence}</div></section>'
     )
 
 

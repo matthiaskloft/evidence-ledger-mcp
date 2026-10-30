@@ -6,7 +6,7 @@ These instructions apply to every coding agent working in this repository (Claud
 
 This repository holds two separate contributions (see README.md):
 
-1. **The evidence ledger schema** in `schema/`, versioned and tagged `schema-vX.Y.Z`.
+1. **The evidence ledger schema** in `schema/`, versioned and tagged `schema-vX.Y.Z`. Bump its version in the schema's `$id` and `title`, the README, our ledgers' headers and the development repository's copy (`agentic-scientific-workflows/spec/`) together.
 2. **The evidence ledger MCP server**, versioned on its own.
 
 Keep changes to one contribution in their own commits and pull requests where possible. A breaking schema change needs a new schema version.
@@ -22,6 +22,7 @@ Every citation we add to this repository (README, docs, code comments, schema de
 - The ledgers are **private**. `ledger/` is git-ignored because records hold verbatim quotes from copyrighted sources. Never commit a ledger, force-add it, or copy quotes from it into tracked files.
 - Add or update the record in the same change that adds or edits the citation, and check that its `anchor.exact` text still appears in the file.
 - Recompute `quote_hash` whenever a quote changes, and validate the ledger against the schema before committing.
+- Start each ledger with a header (`schema_version`, `work`). Use `note` and `notes` for comments, never for source text: they are exported with the ledger.
 - Take quotes only from the source itself (full text or PDF). Never write a quote from memory; if no passage can be found, say so instead of creating a record.
 
 ## Publishing ledgers later

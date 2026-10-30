@@ -270,6 +270,16 @@ def test_bib_keys_come_from_line_starts_only(path: str) -> None:
     assert checks.bibliography_keys(bib) == {"realKey", "indented"}
 
 
+def test_bib_comment_blocks_hide_their_entries(path: str) -> None:
+    bib = write(
+        path,
+        "refs.bib",
+        "@comment{Removed:\n@article{removedKey,\n  title = {Removed}}\n}\n"
+        "@string(jn = {J})\n@article{kept,\n  journal = jn,\n}\n",
+    )
+    assert checks.bibliography_keys(bib) == {"kept"}
+
+
 def test_csl_ids_may_be_numbers(path: str) -> None:
     csl = write(path, "refs.json", json.dumps([{"id": 7}, {"id": "a"}, {"id": None}, "x"]))
     assert checks.bibliography_keys(csl) == {"7", "a"}

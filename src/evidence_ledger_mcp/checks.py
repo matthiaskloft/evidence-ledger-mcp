@@ -12,7 +12,8 @@ from evidence_ledger_mcp import embed, ledger
 
 HTML_SUFFIXES = (".html", ".htm")
 ENTRY_FIELDS = ("locator", "quote", "justification")
-_BIB_ENTRY = re.compile(r"^\s*@\s*(\w+)\s*[{(]\s*([^,\s]+)\s*,", re.M)
+_BIB_START = re.compile(r"^\s*@\s*(\w+)\s*([{(])", re.M)
+_BIB_KEY = re.compile(r"\s*([^,\s]+)\s*,")
 _BIB_NON_ENTRIES = {"string", "comment", "preamble"}
 
 Row = tuple[str, ledger.Record]
@@ -25,6 +26,24 @@ def _read_text(path: str) -> str:
         raise ValueError(f"{path}: not UTF-8") from exc
 
 
+def _bib_keys(text: str) -> set[str]:
+    """Entry keys, skipping the whole body of @comment, @preamble and @string blocks."""
+    keys: set[str] = set()
+    pos = 0
+    while start := _BIB_START.search(text, pos):
+        pos = start.end()
+        if start.group(1).lower() in _BIB_NON_ENTRIES:
+            opening = start.group(2)
+            closing = "}" if opening == "{" else ")"
+            depth = 1
+            while depth and pos < len(text):
+                depth += (text[pos] == opening) - (text[pos] == closing)
+                pos += 1
+        elif key := _BIB_KEY.match(text, pos):
+            keys.add(key.group(1))
+    return keys
+
+
 def bibliography_keys(path: str) -> set[str]:
     """Entry keys of a BibTeX (.bib) or CSL JSON (.json) file."""
     suffix = Path(path).suffix.lower()
@@ -34,9 +53,7 @@ def bibliography_keys(path: str) -> set[str]:
         )
     text = _read_text(path)
     if suffix == ".bib":
-        return {
-            key for kind, key in _BIB_ENTRY.findall(text) if kind.lower() not in _BIB_NON_ENTRIES
-        }
+        return _bib_keys(text)
     try:
         items = json.loads(text)
     except json.JSONDecodeError as exc:

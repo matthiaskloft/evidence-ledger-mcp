@@ -7,9 +7,9 @@ This repository holds two separate contributions:
 1. **The evidence ledger schema** (`schema/`): a format for structured records that make every citation in a work (a manuscript, software or other) checkable. It stands on its own: any tool or agent can write and check ledgers with it, without our server. Status: draft v0.4.0, may still change in breaking ways.
 2. **The evidence ledger MCP server** (`src/`, Python package `evidence-ledger-mcp`): a tool through which agents write and check ledgers that follow the schema. Status: early; it creates, appends to, searches, validates and withdraws records in JSON Lines ledgers (roadmap 0.1) and exports them at the levels full, masked or locator (roadmap 0.2), and writes an HTML summary grouped by claim that prints to PDF (roadmap 0.3). Checks are planned.
 
-The two have separate version numbers. Schema releases are tagged `schema-vX.Y.Z`; the server will state which schema versions it supports. The schema will move to a repository of its own before v1.0.
+The two have separate version numbers. Schema releases are tagged `schema-vX.Y.Z`; the server currently supports schema v0.4.0 and reports it through `schema_info`. The schema will move to a repository of its own before v1.0.
 
-No licence has been chosen yet, so all rights are reserved for now.
+The evidence ledger schema in `schema/` is licensed under Creative Commons Attribution 4.0 International (CC BY 4.0); see [schema/LICENSE](schema/LICENSE). Attribution: Matthias Kloft. This licence applies to the schema, not to ledger contents or third-party source material. The MCP server and its associated documentation are licensed under the MIT licence; see [LICENSE](LICENSE). The schema retains its separate CC BY 4.0 licence, including the copy bundled with the server.
 
 ## Purpose
 
@@ -25,7 +25,7 @@ When an LLM agent or a person adds a citation, the ledger records what is claime
 - JSON Lines: the first line is `{"ledger": <header>}`; every following line is one record.
 - A plain list of records, without header, stays valid.
 
-**File format.** The schema is format-neutral: it validates parsed records, so a ledger can be JSON, JSON Lines or YAML. The MCP server will store ledgers as JSON Lines (`.jsonl`, one record per line), because new records are appended as single lines, concurrent additions rarely conflict, and agents write JSON reliably. YAML is accepted for records written by hand and as a readable export; quote dates in YAML (`date: "2026-10-30"`), since unquoted dates are not read as text.
+**File format.** The schema is format-neutral: it validates parsed records, so a ledger can be JSON, JSON Lines or YAML. The MCP server stores ledgers as JSON Lines (`.jsonl`, one record per line), because new records are appended as single lines, concurrent additions rarely conflict, and agents write JSON reliably. The schema also supports records written by hand in YAML; the server reads JSON Lines and exports JSON or JSON Lines. When writing YAML, quote dates (`date: "2026-10-30"`), since unquoted dates are not read as text.
 
 Each record contains:
 
@@ -70,6 +70,23 @@ A minimal record:
 ```
 
 Quotes from copyrighted sources belong in a private ledger. A public ledger should keep only locators and hashes.
+
+## Running the MCP server
+
+Requires Python 3.11 or newer. From a source checkout with uv installed:
+
+```bash
+uv sync
+uv run evidence-ledger-mcp
+```
+
+The server uses stdio. Configure an MCP client to run `uv` with arguments `run`, `--directory`, the absolute path to this checkout, and `evidence-ledger-mcp`. Pass absolute ledger paths to tools; relative paths resolve against the server's working directory.
+
+Available tools are `schema_info`, `validate_record`, `create_ledger`, `add_record`, `get_record`, `find_records`, `validate_ledger`, `withdraw_record`, `export_ledger` and `summarize_ledger`. Create a ledger with a `work` containing `title` and `type`, then pass records and a separate `provenance` object to `add_record`. The server assigns record IDs, assigns claim IDs unless supplied, computes n2 quote hashes and fills in the provenance date.
+
+`export_ledger` defaults to `level="full"`, `format="jsonl"` and excluding withdrawn records. Keep full exports private. Use `level="masked"` with optional `max_words` (1–25) for excerpts, or `level="locator"` to remove quoted source text. Exports retain other record metadata, including `note` and header `notes`, and always remove `locator.chunk`. A publication check rejects copied source text in other metadata at masked and locator levels; it does not replace publication approval. The output must be a new file.
+
+`summarize_ledger` writes a self-contained HTML report grouped by claim, with `full`, `masked` and `locator` levels. Print it from a browser to produce a PDF; the server does not write PDFs directly. Masked summaries use the default start/end masking and do not accept `max_words`.
 
 ## Where the fields come from
 

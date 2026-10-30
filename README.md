@@ -1,5 +1,7 @@
 # evidence-ledger-mcp
 
+> **Under active development.** Both the schema and the server may change in breaking ways between versions until v1.0. Pin the version you use.
+
 This repository holds two separate contributions:
 
 1. **The evidence ledger schema** (`schema/`): a format for structured records that make every citation in a manuscript checkable. It stands on its own: any tool or agent can write and check ledgers with it, without our server. Status: draft v0.2.0, may still change in breaking ways.

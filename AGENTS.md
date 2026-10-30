@@ -23,6 +23,7 @@ Every citation we add to this repository (README, docs, code comments, schema de
 - Add or update the record in the same change that adds or edits the citation, and check that its `anchor.exact` text still appears in the file.
 - Recompute `quote_hash` whenever a quote changes, and validate the ledger against the schema before committing.
 - Start each ledger with a header (`schema_version`, `work`). Use `note` and `notes` for comments, never for source text: they are exported with the ledger.
+- Enable the pre-commit hook once per clone with `git config core.hooksPath .githooks`, and install PyYAML for the `python` it runs (`python -m pip install pyyaml`). It runs `tools/check_public.py --staged`, which blocks commits that contain ledger files, quote fields, quotes from the private ledgers, or email addresses other than noreply addresses. CI runs the same check on all tracked files. Never bypass it with `--no-verify`.
 - Take quotes only from the source itself (full text or PDF). Never write a quote from memory; if no passage can be found, say so instead of creating a record.
 
 ## Publishing ledgers later

@@ -420,6 +420,11 @@ def _parse(html: str) -> _Doc:
     return doc
 
 
+def reference_keys(html: str) -> set[str]:
+    """The keys of the work's `id="ref-<key>"` bibliography entries."""
+    return {unescape(a or b) for a, b in _REF_ID.findall(html)}
+
+
 def _occurrences(text: str, needle: str) -> list[int]:
     found = []
     start = text.find(needle)
@@ -600,7 +605,7 @@ def embed(
     del header  # the work's own title and metadata stay as rendered
     doc = _parse(work_html)
     groups = summary._group(records)
-    refs = {unescape(a or b) for a, b in _REF_ID.findall(work_html)}
+    refs = reference_keys(work_html)
     key_hrefs = {
         str(r["key"]): f"#ref-{r['key']}" for r in records if f"{r.get('key', '')}" in refs
     }

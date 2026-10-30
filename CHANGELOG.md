@@ -1,6 +1,6 @@
 # Changelog
 
-Changes to the MCP server package `evidence-ledger-mcp`. Schema changes are released separately under `schema-vX.Y.Z` tags. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
+Changes to the MCP server package `evidence-ledger-mcp`. Schema changes are released separately in [evidence-ledger-schema](https://github.com/matthiaskloft/evidence-ledger-schema). Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 

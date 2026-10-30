@@ -1,8 +1,13 @@
 # evidence-ledger-mcp
 
-A schema for **evidence ledgers**: structured records that make every citation in a manuscript checkable. An MCP server that writes and checks ledgers will follow in this repository.
+This repository holds two separate contributions:
 
-> Status: draft. Schema v0.2.0 may still change in breaking ways. No licence has been chosen yet, so all rights are reserved for now.
+1. **The evidence ledger schema** (`schema/`): a format for structured records that make every citation in a manuscript checkable. It stands on its own: any tool or agent can write and check ledgers with it, without our server. Status: draft v0.2.0, may still change in breaking ways.
+2. **The evidence ledger MCP server**: a tool through which agents write and check ledgers that follow the schema. Status: not yet started.
+
+The two have separate version numbers. Schema releases are tagged `schema-vX.Y.Z`; the server will state which schema versions it supports. The schema will move to a repository of its own before v1.0.
+
+No licence has been chosen yet, so all rights are reserved for now.
 
 ## Purpose
 
@@ -69,7 +74,3 @@ Quotes from copyrighted sources belong in a private ledger. A public ledger shou
 - Nicholson, J. M., Mordaunt, M., Lopez, P., Uppala, A., Rosati, D., Rodrigues, N. P., Grabitz, P., & Rife, S. C. (2021). scite: A smart citation index that displays the context of citations and classifies their intent using deep learning. *Quantitative Science Studies, 2*(3), 882–898. https://doi.org/10.1162/qss_a_00146
 - Peroni, S., & Shotton, D. (2012). FaBiO and CiTO: Ontologies for describing bibliographic resources and citations. *Journal of Web Semantics, 17*, 33–43. https://doi.org/10.1016/j.websem.2012.08.001
 - Sanderson, R., Ciccarese, P., & Young, B. (Eds.). (2017). *Web Annotation Data Model*. W3C Recommendation. https://www.w3.org/TR/2017/REC-annotation-model-20170223/
-
-## Versioning
-
-The schema has its own version, independent of the server. Schema releases are tagged `schema-vX.Y.Z`.

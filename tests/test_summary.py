@@ -169,3 +169,19 @@ def test_grouping_preserves_different_anchors_and_reasons(path: str) -> None:
     html = write(path)
     assert "Another occurrence in the work." in html
     assert "Established background." in html
+    assert "<b>Contestable:</b> no" in html
+
+
+@pytest.mark.parametrize("level", ["full", "masked", "locator"])
+@pytest.mark.parametrize("exact", [None, "Another claim occurrence."])
+def test_grouping_preserves_different_markers(path: str, level: str, exact: str | None) -> None:
+    add(path, claim_id="C-0001", anchor={"marker": "Introduction [1]"})
+    anchor = {"marker": "Discussion <2>"}
+    if exact is not None:
+        anchor["exact"] = exact
+    add(path, claim_id="C-0001", anchor=anchor)
+    html = write(path, level=level)
+    assert "<b>Marker:</b> Introduction [1]" in html
+    assert "<b>Marker:</b> Discussion &lt;2&gt;" in html
+    if exact is not None:
+        assert f"<mark>{exact}</mark>" in html

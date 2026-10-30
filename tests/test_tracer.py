@@ -13,7 +13,7 @@ from mcp.client.stdio import stdio_client
 
 WORK = {"title": "Example work", "type": "manuscript"}
 PROVENANCE = {"by_type": "agent", "by": "Claude Code", "model": "claude-opus-5-5"}
-# The README's minimal record, minus the fields the server fills in.
+# The schema README's minimal record, minus the fields the server fills in.
 RECORD: dict[str, Any] = {
     "claim": "Keeping a ledger cut unchecked citations from 40 to 3 per manuscript.",
     "claim_type": "empirical",

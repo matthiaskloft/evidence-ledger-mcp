@@ -12,18 +12,25 @@ The server works on its own: it does not depend on other MCP servers or on a par
 - Validate a whole ledger.
 - Withdraw records (`withdrawn`) instead of deleting them.
 
-## 0.2: export
+## 0.2: export levels
 
 Every export is produced at one of the levels `full`, `masked` or `locator`, and runs the publication check before anything is written, so that no export carries more source text than its level allows.
 
-- **Embedded rendering** (the main export): the work itself, with each backed claim linked to its evidence. Standard formats are HTML (interactive) and PDF. The server supplies the claim data and the filters or packages a document toolchain needs (Pandoc/Quarto, LaTeX); it does not bundle that toolchain.
-- **Ledger summary**: a standalone report of all records, grouped by claim, in HTML and PDF.
-- **Machine-readable export**: the ledger as JSON or JSON Lines at the chosen level, for reviewers, journals and other tools.
-- Links from each record's `key` to the work's bibliography.
-- Links from each record to the source in the reader's own library (a Zotero item or a local PDF, opened at the page of the passage), read from a local link file (see 0.3). Without it, exports link to the DOI or URL.
+- **Levels:** `full` keeps every field; `masked` keeps the first and last words of each quote, plus locator and hash; `locator` keeps key, locator and hash, but no quoted source text. Every level drops local lookup hints (`locator.chunk`).
+- **Publication check:** refuse to write an export that contains source text beyond its level.
+- **Machine-readable export:** the ledger as JSON or JSON Lines at the chosen level, for reviewers, journals and other tools.
+
+## 0.3: ledger summary
+
+- A standalone report of all records, grouped by claim, in HTML and PDF.
 - Annotations readable without hovering and in print.
 
-## 0.3: checks
+## 0.4: embedded rendering
+
+- The work itself, with each backed claim linked to its evidence. Standard formats are HTML (interactive) and PDF. The server supplies the claim data and the filters or packages a document toolchain needs (Pandoc/Quarto, LaTeX); it does not bundle that toolchain.
+- Links from each record's `key` to the work's bibliography.
+
+## 0.5: checks
 
 - Check that each anchor still appears in the work, and flag records assessed against an earlier revision of it.
 - Re-check quotes against source text passed in by the agent or fetched from a public URL.
@@ -39,6 +46,10 @@ A ledger carries only portable identifiers (DOI, ISBN, URL, title), the locator 
 - Report per record: passage found, source found but passage not found, or source not in the library. A found passage confirms the record independently.
 
 A recipient can then rebuild the links in an export without the author's files.
+
+## 0.6: library links in exports
+
+- Links from each record to the source in the reader's own library (a Zotero item or a local PDF, opened at the page of the passage), read from the local link file (see 0.5). Without it, exports link to the DOI or URL.
 
 ## Testing throughout
 

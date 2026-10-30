@@ -22,7 +22,7 @@ Every export is produced at one of the levels `full`, `masked` or `locator`, and
 
 ## 0.3: ledger summary
 
-- A standalone report of all records, grouped by claim, in HTML and PDF.
+- A standalone report of all records, grouped by claim, as HTML that prints to PDF from a browser (the server writes no PDF).
 - Annotations readable without hovering and in print.
 
 ## 0.4: embedded rendering

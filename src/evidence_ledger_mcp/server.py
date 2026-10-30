@@ -7,7 +7,7 @@ from typing import Any, Literal
 
 from mcp.server.fastmcp import FastMCP
 
-from evidence_ledger_mcp import export, ledger
+from evidence_ledger_mcp import export, ledger, summary
 from evidence_ledger_mcp.schema import record_errors, schema_version
 
 mcp = FastMCP(
@@ -96,6 +96,20 @@ def export_ledger(
     default masking. With a budget, `quote_focus` centres the excerpt. A `full` export
     holds whole quotes: keep it private."""
     return export.export_ledger(path, out, level, format, include_withdrawn, max_words)
+
+
+@mcp.tool()
+def summarize_ledger(
+    path: str,
+    out: str,
+    level: Literal["full", "masked", "locator"] = "full",
+    include_withdrawn: bool = False,
+) -> Record:
+    """Write a standalone HTML summary of the records, grouped by claim, to a new file. Levels
+    and the publication check work as in `export_ledger`, and `out` is never overwritten. A
+    `full` summary holds whole quotes: keep it private. For a PDF, print the HTML from a
+    browser; its print style shows link targets and avoids splitting records where possible."""
+    return summary.summarize_ledger(path, out, level, include_withdrawn)
 
 
 def main() -> None:

@@ -1,0 +1,294 @@
+"""Summarize a ledger as one self-contained HTML page, grouped by claim; prints to PDF."""
+
+from __future__ import annotations
+
+from html import escape
+from pathlib import Path
+from typing import Any
+from urllib.parse import urlsplit
+
+from evidence_ledger_mcp import export, ledger
+from evidence_ledger_mcp.ledger import Record
+
+LOCATOR_FIELDS = ("page", "section", "figure", "table")
+QUOTES_SHOWN = {
+    "full": "complete",
+    "masked": "first and last words only",
+    "locator": "none, locators only",
+}
+# One card per claim: the claim on top, its evidence below a rule, records split by
+# rules. Metadata is small, muted and labelled in capitals so it never reads like claim or quote.
+STYLE = """
+:root {
+  --bg: #f6f7f9; --card: #fff;
+  --text: #1d2228; --muted: #5d6673;
+  --line: #dde1e7; --accent: #2f5fb3;
+  --supports: #2e7d4f; --partial: #9a6a00; --contrasts: #b23b3b; --other: #5d6673;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #15181d; --card: #1e2229;
+    --text: #e4e7ec; --muted: #9aa3b0;
+    --line: #343a44; --accent: #7aa2f7;
+    --supports: #5cc489; --partial: #e0b040; --contrasts: #f07878; --other: #9aa3b0;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text);
+  font: 16px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif; }
+main { max-width: 54rem; margin: 0 auto; padding: 2rem 1rem 4rem; }
+a { color: var(--accent); }
+h1 { font-size: 1.6rem; margin: 0 0 0.5rem; }
+.id { font-weight: 600; color: var(--muted); margin-right: 0.5rem; }
+.meta { display: flex; flex-wrap: wrap; gap: 0.4rem 1.75rem; margin: 0.6rem 0;
+  font-size: 0.88rem; }
+.meta div { min-width: 7rem; }
+.meta dt { font-size: 0.68rem; font-weight: 600; text-transform: uppercase;
+  letter-spacing: 0.05em; color: var(--muted); }
+.meta dd { margin: 0; overflow-wrap: anywhere; }
+section.claim { background: var(--card); border: 1px solid var(--line); border-radius: 8px;
+  margin-top: 1.75rem; overflow: hidden; }
+.claim-part { padding: 1.1rem 1.4rem 0.6rem; }
+.evidence { border-top: 1px solid var(--line);
+  padding: 0.2rem 1.4rem 0.6rem; }
+.claim-text { font-size: 1.2rem; font-weight: 600; line-height: 1.4; margin: 0.15rem 0 0.6rem; }
+.label { font-size: 0.7rem; font-weight: 600; text-transform: uppercase;
+  letter-spacing: 0.06em; color: var(--muted); margin: 1.25rem 0 0.5rem; }
+article.record { padding: 0.9rem 0; }
+article.record + article.record { border-top: 1px solid var(--line); }
+.record-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.6rem; }
+.key { font-weight: 600; }
+.relation { font-size: 0.75rem; font-weight: 600; padding: 0.05rem 0.5rem;
+  border: 1px solid currentColor; border-radius: 999px; color: var(--other); }
+.rel-supports { color: var(--supports); }
+.rel-partially_supports { color: var(--partial); }
+.rel-contrasts { color: var(--contrasts); }
+blockquote { margin: 0.7rem 0; padding: 0.1rem 0 0.1rem 1rem;
+  border-left: 3px solid var(--line); font-family: Georgia, "Times New Roman", serif;
+  font-size: 1.02rem; font-style: italic; }
+.anchor { margin: 0 0 0.6rem; padding: 0.1rem 0 0.1rem 0.9rem; border-left: 3px solid var(--line); }
+mark { background: none; color: inherit; font-weight: 700;
+  text-decoration: underline 2px var(--accent); text-underline-offset: 0.2em; }
+.justification, .note { margin: 0.5rem 0; }
+.note { color: var(--muted); }
+.provenance { margin: 0.5rem 0 0; font-size: 0.8rem; color: var(--muted); }
+.withdrawn { color: var(--contrasts); font-weight: 600; }
+@media print {
+  :root { --bg: #fff; --card: #fff; --text: #000; --muted: #444;
+    --line: #999; --accent: #000; }
+  body { font-size: 10.5pt; }
+  main { max-width: none; padding: 0; }
+  section.claim { border-color: var(--line); }
+  .evidence { border-top: 1px solid var(--line); }
+  article.record { break-inside: avoid; }
+  .claim-text, .label { break-after: avoid; }
+  a { color: #000; text-decoration: none; }
+  a[href]::after { content: " (" attr(href) ")"; }
+}
+"""
+
+
+def _e(value: object) -> str:
+    return escape(str(value))
+
+
+def _link(href: str, label: str) -> str:
+    # Ledgers can be edited outside the server, so escaping alone is insufficient.
+    try:
+        scheme = urlsplit(href).scheme.lower()
+    except ValueError:
+        return _e(label)
+    if scheme not in {"http", "https"}:
+        return _e(label)
+    return f'<a href="{_e(href)}">{_e(label)}</a>'
+
+
+def _meta(rows: list[tuple[str, str]]) -> str:
+    items = "".join(f"<div><dt>{_e(k)}</dt><dd>{v}</dd></div>" for k, v in rows if v)
+    return f'<dl class="meta">{items}</dl>' if items else ""
+
+
+def _identifiers(record: Record) -> str:
+    parts = []
+    if "doi" in record:
+        parts.append("doi " + _link(f"https://doi.org/{record['doi']}", str(record["doi"])))
+    if "url" in record:
+        parts.append(_link(str(record["url"]), str(record["url"])))
+    if "isbn" in record:
+        parts.append("isbn " + _e(record["isbn"]))
+    return "; ".join(parts)
+
+
+def _locator(record: Record) -> str:
+    loc = record.get("locator")
+    if not isinstance(loc, dict):
+        return ""
+    return ", ".join(f"{f} {_e(loc[f])}" for f in LOCATOR_FIELDS if f in loc)
+
+
+def _provenance(record: Record) -> str:
+    prov = record.get("provenance")
+    if not isinstance(prov, dict):
+        return ""
+    return ", ".join(
+        _e(prov[f]) for f in ("by_type", "by", "model", "date", "manuscript_rev") if f in prov
+    )
+
+
+def _prose(cls: str, label: str, value: object) -> str:
+    return f'<p class="{cls}"><b>{label}:</b> {_e(value)}</p>' if value else ""
+
+
+def _record(record: Record) -> str:
+    relation = str(record.get("relation", ""))
+    badge = (
+        f'<span class="relation rel-{_e(relation)}">{_e(relation.replace("_", " "))}</span>'
+        if relation
+        else ""
+    )
+    head = (
+        f'<div class="record-head"><span class="id">{_e(record.get("id", ""))}</span>'
+        f'<span class="key">{_e(record.get("key", ""))}</span>{badge}</div>'
+    )
+    gone = (
+        f'<p class="withdrawn">withdrawn: {_e(record["withdrawn"])}</p>'
+        if "withdrawn" in record
+        else ""
+    )
+    quote = f"<blockquote>{_e(record['quote'])}</blockquote>" if "quote" in record else ""
+    body = (
+        quote
+        + _prose("justification", "Why", record.get("justification"))
+        + _prose("note", "Note", record.get("note"))
+        + _prose("note", "No identifier reason", record.get("no_identifier_reason"))
+        + _prose("note", "Quote prefix", record.get("quote_prefix"))
+        + _prose("note", "Quote suffix", record.get("quote_suffix"))
+        + _prose("note", "Importance reason", record.get("importance_reason"))
+        + _prose("note", "Contestable reason", record.get("contestable_reason"))
+    )
+    meta = _meta(
+        [
+            ("source", _identifiers(record)),
+            ("locator", _locator(record)),
+            ("evidence kind", _e(record.get("evidence_kind", ""))),
+            ("quote hash", _e(record.get("quote_hash", ""))),
+            ("retrieved via", _e(record.get("retrieved_via", ""))),
+            (
+                "found via",
+                ", ".join(_e(v) for v in record["found_via"].values())
+                if isinstance(record.get("found_via"), dict)
+                else "",
+            ),
+            ("Zotero link", _e(record.get("zotero_link", ""))),
+            ("derived from", _e(record.get("derived_from", ""))),
+        ]
+    )
+    prov = _provenance(record)
+    added = f'<p class="provenance">Added by {prov}</p>' if prov else ""
+    return f'<article class="record">{head}{gone}{body}{meta}{added}</article>'
+
+
+def _anchor(anchor: object) -> str:
+    """The claim as it stands in the work, its exact words marked within their context."""
+    if not isinstance(anchor, dict):
+        return ""
+    marker = _prose("note", "Marker", anchor.get("marker"))
+    if "exact" not in anchor:
+        return marker
+    text = (
+        _e(anchor.get("prefix", ""))
+        + f"<mark>{_e(anchor['exact'])}</mark>"
+        + _e(anchor.get("suffix", ""))
+    )
+    return f'<p class="label">In the work</p>{marker}<p class="anchor">{text}</p>'
+
+
+def _claim(claim_id: str, records: list[Record]) -> str:
+    first = records[0]
+    anchor = first.get("anchor")
+    contestable = first.get("contestable")
+    meta = _meta(
+        [
+            ("type", _e(first.get("claim_type", ""))),
+            ("importance", _e(first.get("importance", ""))),
+            ("contestable", "" if contestable is None else ("yes" if contestable else "no")),
+        ]
+    )
+    n = len(records)
+    label = f'<p class="label">Evidence ({n} {"source" if n == 1 else "sources"})</p>'
+    body = ""
+    for record in records:
+        differences = "".join(
+            _prose(
+                "note",
+                field.replace("_", " ").capitalize(),
+                ("yes" if record[field] else "no") if field == "contestable" else record[field],
+            )
+            for field in ("claim", "claim_type", "contestable")
+            if field in record and record.get(field) != first.get(field)
+        )
+        if record.get("anchor") != anchor:
+            differences += _anchor(record.get("anchor"))
+        body += differences + _record(record)
+    return (
+        f'<section class="claim"><div class="claim-part"><p class="claim-text">'
+        f'<span class="id">{_e(claim_id)}</span>{_e(first.get("claim", ""))}</p>'
+        f"{_anchor(anchor)}{meta}"
+        f'</div><div class="evidence">{label}{body}</div></section>'
+    )
+
+
+def _group(records: list[Record]) -> dict[str, list[Record]]:
+    groups: dict[str, list[Record]] = {}
+    for record in records:
+        groups.setdefault(str(record.get("claim_id", "")), []).append(record)
+    return dict(sorted(groups.items()))
+
+
+def render(header: dict[str, Any], records: list[Record], level: str) -> str:
+    work = header.get("work")
+    work = work if isinstance(work, dict) else {}
+    title = _e(work.get("title", "Evidence ledger"))
+    groups = _group(records)
+    meta = _meta(
+        [
+            ("work", _e(work.get("type", ""))),
+            ("claims", str(len(groups))),
+            ("records", str(len(records))),
+            ("quotes shown", QUOTES_SHOWN[level]),
+            ("schema", _e(header.get("schema_version", ""))),
+            ("created", _e(header.get("created", ""))),
+            ("location", _e(work.get("location", ""))),
+        ]
+    )
+    claims = "".join(_claim(cid, recs) for cid, recs in groups.items())
+    return (
+        '<!DOCTYPE html>\n<html lang="en"><head><meta charset="utf-8">'
+        '<meta name="viewport" content="width=device-width, initial-scale=1">'
+        '<meta name="color-scheme" content="light dark">'
+        f"<title>{title}: evidence ledger summary</title><style>{STYLE}</style></head>"
+        f"<body><main><h1>{title}: evidence ledger summary</h1>{meta}"
+        f"{_prose('note', 'Description', header.get('description'))}"
+        f"{_prose('note', 'Notes', header.get('notes'))}{claims}</main></body>"
+        "</html>\n"
+    )
+
+
+def summarize_ledger(
+    path: str, out: str, level: str = "full", include_withdrawn: bool = False
+) -> dict[str, Any]:
+    """Write an HTML summary to a new file; refuses if the level still leaks source text."""
+    if level not in export.LEVELS:
+        raise ValueError(f"level must be one of {', '.join(export.LEVELS)}")
+    if Path(out).resolve() == Path(path).resolve():
+        raise ValueError("out must differ from the ledger file")
+    header, records = ledger.read(path)
+    kept = [
+        export.export_record(r, level) for r in records if include_withdrawn or "withdrawn" not in r
+    ]
+    if problems := export.publication_problems(header, kept, records, level):
+        raise ValueError("Publication check failed: " + "; ".join(problems))
+    text = render(header, kept, level)
+    with open(out, "x", encoding="utf-8", newline="\n") as handle:
+        handle.write(text)
+    return {"path": out, "level": level, "records": len(kept), "claims": len(_group(kept))}

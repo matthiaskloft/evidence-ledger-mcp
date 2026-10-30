@@ -1,3 +1,6 @@
 __pycache__/
 .venv/
 .DS_Store
+
+# Private evidence ledger (contains source quotes)
+ledger/

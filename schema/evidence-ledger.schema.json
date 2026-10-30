@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://matthiaskloft.github.io/evidence-ledger-mcp/schema/0.3.0/evidence-ledger.schema.json",
-  "title": "Evidence ledger record (v0.3.0, draft)",
+  "$id": "https://matthiaskloft.github.io/evidence-ledger-mcp/schema/0.4.0/evidence-ledger.schema.json",
+  "title": "Evidence ledger record (v0.4.0, draft)",
   "description": "One record links a claim in a work (a manuscript, software or other) to the source passage that backs it. A ledger is a list of records, optionally preceded by a header ($defs/header); see README.md for the file shapes.",
   "type": "object",
   "additionalProperties": false,
@@ -26,6 +26,9 @@
     ],
     "importance_reason": [
       "importance"
+    ],
+    "quote_focus": [
+      "quote"
     ]
   },
   "$defs": {
@@ -84,8 +87,51 @@
         "notes": {
           "$ref": "#/$defs/text",
           "description": "Free text about the ledger as a whole. Exported with the ledger: never paste source text here"
+        },
+        "level": {
+          "enum": [
+            "full",
+            "masked",
+            "locator"
+          ],
+          "description": "Export level; omitted for a private working ledger"
+        },
+        "max_words": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1,
+          "maximum": 25,
+          "description": "Word budget for masked exports; null preserves default masking"
         }
-      }
+      },
+      "dependentRequired": {
+        "max_words": [
+          "level"
+        ]
+      },
+      "allOf": [
+        {
+          "if": {
+            "required": [
+              "max_words"
+            ],
+            "properties": {
+              "max_words": {
+                "type": "integer"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "level": {
+                "const": "masked"
+              }
+            }
+          }
+        }
+      ]
     }
   },
   "properties": {
@@ -261,7 +307,7 @@
     "quote_hash": {
       "type": "string",
       "pattern": "^sha256-n[0-9]+:[0-9a-f]{64}$",
-      "description": "sha256 of the quote after normalization n1: Unicode NFKC, casefold, keep only letters and digits"
+      "description": "SHA-256 of UTF-8 normalized quote. New hashes use n2: Unicode NFKC, casefold, NFKC again, keep only letters and digits. Legacy n1 omits the second NFKC and remains checkable."
     },
     "relation": {
       "enum": [
@@ -377,6 +423,10 @@
       ],
       "default": "literature",
       "description": "Reserved: claims about own results"
+    },
+    "quote_focus": {
+      "$ref": "#/$defs/text",
+      "description": "Phrase carrying the claim within quote; must occur exactly once, cover whole whitespace-delimited words, and contain at most 25 words. Source text: removed from masked and locator exports."
     }
   },
   "allOf": [

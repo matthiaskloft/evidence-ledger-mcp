@@ -24,7 +24,7 @@ RECORD: dict[str, Any] = {
     "justification": "The quoted sentence states both counts.",
     "retrieved_via": "pdf",
 }
-README_HASH = "sha256-n1:3b8d67a25018dccc865ee88b24c10aa4a5b553e41ff28ebc46936a71eee7db3c"
+README_HASH = "sha256-n2:3b8d67a25018dccc865ee88b24c10aa4a5b553e41ff28ebc46936a71eee7db3c"
 
 
 @pytest.fixture
@@ -46,6 +46,7 @@ def rewrite_line(path: str, index: int, record: dict[str, Any]) -> None:
 
 def test_quote_hash_normalizes() -> None:
     assert ledger.quote_hash(RECORD["quote"]) == README_HASH
+    assert ledger.quote_hash(RECORD["quote"], "n1") == README_HASH.replace("n2:", "n1:")
     messy = "  LEDGER  records, reduced... unchecked citations from 40 to 3 per manuscript!"
     assert ledger.quote_hash(messy) == README_HASH
     assert ledger.quote_hash("ﬁx it") == ledger.quote_hash("FIX-IT")
@@ -211,3 +212,51 @@ def test_header_with_bom_is_read(path: str) -> None:
 def test_validate_reports_unhashable_importance(path: str) -> None:
     rewrite_line(path, 1, {**add(path), "importance": ["critical"]})
     assert any(p.startswith("R-0001: importance") for p in ledger.validate_ledger(path))
+
+
+@pytest.mark.parametrize("quote", ["ΐ", "\u0399\u0308\u0301", "ǰ", "J̌", "ẖ", "H̱"])
+def test_n2_case_stable(quote: str) -> None:
+    assert ledger.quote_hash(quote) == ledger.quote_hash(quote.upper())
+
+
+def test_greek_hash_vector() -> None:
+    assert ledger.normalize("ΐ") == "ΐ"
+    assert (
+        ledger.quote_hash("ΐ")
+        == "sha256-n2:e45728ad6aeb8fcc4a0b4669abd3eed0b5e6aea36feae65b0ab69ce5ade3ac2d"
+    )
+
+
+def test_legacy_hash_is_checked(path: str) -> None:
+    record = add(path, quote="ΐ")
+    record["quote_hash"] = ledger.quote_hash("ΐ", "n1")
+    assert record["quote_hash"] != ledger.quote_hash("ΐ")
+    rewrite_line(path, 1, record)
+    assert ledger.validate_ledger(path) == []
+    record["quote_hash"] = "sha256-n9:" + "0" * 64
+    rewrite_line(path, 1, record)
+    assert any("quote_hash" in e for e in ledger.validate_ledger(path))
+
+
+@pytest.mark.parametrize("focus", ["missing", "cit", " citations", " ", "Ledger Ledger"])
+def test_bad_focus_writes_nothing(path: str, focus: str) -> None:
+    before = Path(path).read_bytes()
+    with pytest.raises(ValueError, match="quote_focus"):
+        add(path, quote_focus=focus)
+    assert Path(path).read_bytes() == before
+
+
+def test_duplicate_and_oversized_focus(path: str) -> None:
+    for quote, focus in [
+        ("word word", "word"),
+        (" ".join(map(str, range(26))), " ".join(map(str, range(26)))),
+    ]:
+        with pytest.raises(ValueError, match="quote_focus"):
+            add(path, quote=quote, quote_focus=focus)
+
+
+def test_focus_hand_edit_is_validated(path: str) -> None:
+    record = add(path, quote_focus="40 to 3")
+    record["quote_focus"] = "missing"
+    rewrite_line(path, 1, record)
+    assert any("quote_focus" in e for e in ledger.validate_ledger(path))

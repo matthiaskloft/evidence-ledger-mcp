@@ -1,0 +1,4 @@
+#!/bin/sh
+# Blocks commits that would publish private ledger content. Enable with:
+#   git config core.hooksPath .githooks
+exec python tools/check_public.py --staged

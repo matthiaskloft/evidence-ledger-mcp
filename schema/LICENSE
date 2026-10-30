@@ -1,0 +1,14 @@
+Evidence ledger schema
+Copyright (c) 2026 Matthias Kloft
+
+The evidence ledger schema in this directory is licensed under the
+Creative Commons Attribution 4.0 International License (CC BY 4.0).
+
+To view the licence and its full legal terms, visit:
+https://creativecommons.org/licenses/by/4.0/legalcode
+
+Attribution: Matthias Kloft, evidence ledger schema.
+Source: https://github.com/matthiaskloft/evidence-ledger-mcp
+
+This licence covers the schema only. It does not license the MCP server,
+ledger contents, or third-party source material.

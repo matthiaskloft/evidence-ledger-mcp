@@ -44,7 +44,8 @@ def create_ledger(
 @mcp.tool()
 def add_record(path: str, record: dict[str, Any], provenance: dict[str, Any]) -> Record:
     """Append a record. The server assigns `id`, `claim_id` (unless given), `quote_hash` and the
-    provenance date, validates the result and returns the stored record."""
+    provenance date, validates the result and returns the stored record. Mark the phrase
+    carrying the claim (a number, term or short statement) with optional `quote_focus`."""
     return ledger.add_record(path, record, provenance)
 
 
@@ -87,11 +88,14 @@ def export_ledger(
     level: Literal["full", "masked", "locator"] = "full",
     format: Literal["json", "jsonl"] = "jsonl",
     include_withdrawn: bool = False,
+    max_words: int | None = None,
 ) -> Record:
     """Export the ledger to a new file. `masked` keeps the first and last words of each quote,
     `locator` no quoted text; a publication check runs before writing, and `out` is never
-    overwritten. A `full` export holds whole quotes: keep it private."""
-    return export.export_ledger(path, out, level, format, include_withdrawn)
+    overwritten. `max_words` is allowed only for `masked`, from 1 to 25; None keeps the
+    default masking. With a budget, `quote_focus` centres the excerpt. A `full` export
+    holds whole quotes: keep it private."""
+    return export.export_ledger(path, out, level, format, include_withdrawn, max_words)
 
 
 def main() -> None:

@@ -59,6 +59,20 @@ async def exports(tmp: Path) -> None:
             )
             assert (summary["level"], summary["records"]) == (level, 1)
 
+        budget_out = str(tmp / "budget.jsonl")
+        await call(session, "export_ledger", path=path, out=budget_out, level="masked", max_words=5)
+        budget_header, budget_records = read_jsonl(Path(budget_out))
+        assert budget_header["level"] == "masked"
+        assert budget_header["max_words"] == 5
+        assert budget_records[0]["quote"] == "Ledger records reduced … per manuscript"
+        for level in ("full", "locator"):
+            failed_budget = await session.call_tool(
+                "export_ledger",
+                {"path": path, "out": str(tmp / "invalid.jsonl"), "level": level, "max_words": 5},
+            )
+            assert failed_budget.isError
+        assert not (tmp / "invalid.jsonl").exists()
+
         # An existing file is never overwritten.
         again = {"path": path, "out": str(tmp / "full.jsonl"), "level": "full"}
         assert (await session.call_tool("export_ledger", again)).isError

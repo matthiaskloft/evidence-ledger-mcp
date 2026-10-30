@@ -27,7 +27,7 @@ RECORD: dict[str, Any] = {
     "justification": "The quoted sentence states both counts.",
     "retrieved_via": "pdf",
 }
-README_HASH = "sha256-n1:3b8d67a25018dccc865ee88b24c10aa4a5b553e41ff28ebc46936a71eee7db3c"
+README_HASH = "sha256-n2:3b8d67a25018dccc865ee88b24c10aa4a5b553e41ff28ebc46936a71eee7db3c"
 
 
 async def call(session: ClientSession, tool: str, **arguments: Any) -> Any:

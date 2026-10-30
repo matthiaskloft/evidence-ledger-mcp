@@ -210,3 +210,130 @@ def test_stock_prefix_in_prose_passes(path: str) -> None:
 def test_claim_may_echo_its_quote(path: str) -> None:
     add(path, claim=f"Studies report that {QUOTE}.", anchor={"exact": QUOTE})
     assert export.export_ledger(path, out_of(path), "masked")["records"] == 1
+
+
+@pytest.mark.parametrize(
+    ("quote", "budget", "expected"),
+    [
+        ("one two", 3, "one two"),
+        ("one two", 2, "one two"),
+        ("one two three four five six", 4, "one two … five six"),
+        ("one two three four five six", 3, "one two … six"),
+        ("one two three", 1, "one …"),
+        ("one\ttwo\nthree four", 2, "one … four"),
+    ],
+)
+def test_budget_mask(quote: str, budget: int, expected: str) -> None:
+    assert export.mask_quote(quote, budget) == expected
+
+
+@pytest.mark.parametrize("level", ["full", "locator"])
+def test_budget_requires_masked(path: str, level: str) -> None:
+    with pytest.raises(ValueError, match="only allowed"):
+        export.export_ledger(path, out_of(path), level, max_words=4)
+    assert not Path(out_of(path)).exists()
+
+
+@pytest.mark.parametrize("budget", [0, -1, export.MAX_EXCERPT_WORDS + 1, True, 1.5])
+def test_invalid_budget(path: str, budget: Any) -> None:
+    with pytest.raises(ValueError, match=str(export.MAX_EXCERPT_WORDS)):
+        export.export_ledger(path, out_of(path), "masked", max_words=budget)
+    assert not Path(out_of(path)).exists()
+
+
+@pytest.mark.parametrize("fmt", ["json", "jsonl"])
+@pytest.mark.parametrize("budget", [None, 4, export.MAX_EXCERPT_WORDS])
+def test_budget_export_header(path: str, fmt: str, budget: int | None) -> None:
+    add(path)
+    export.export_ledger(path, out_of(path), "masked", fmt, max_words=budget)
+    text = Path(out_of(path)).read_text("utf-8")
+    doc = (
+        json.loads(text)
+        if fmt == "json"
+        else {
+            "ledger": json.loads(text.splitlines()[0])["ledger"],
+            "records": [json.loads(text.splitlines()[1])],
+        }
+    )
+    assert doc["ledger"]["level"] == "masked"
+    assert doc["ledger"]["max_words"] == budget
+    assert doc["records"][0]["quote"] == export.mask_quote(QUOTE, budget)
+
+
+@pytest.mark.parametrize("budget", [None, 4])
+def test_check_distrusts_masker(
+    path: str, monkeypatch: pytest.MonkeyPatch, budget: int | None
+) -> None:
+    add(path)
+    monkeypatch.setattr(export, "mask_quote", lambda quote, max_words=None: quote)
+    with pytest.raises(ValueError, match="masked quote"):
+        export.export_ledger(path, out_of(path), "masked", max_words=budget)
+    assert not Path(out_of(path)).exists()
+
+
+@pytest.mark.parametrize("masked", ["manuscript … Ledger", "invented words", "Ledger … Ledger"])
+def test_check_requires_ordered_source_parts(masked: str) -> None:
+    original = {"id": "R-0001", "quote": QUOTE}
+    assert export.publication_problems(
+        {}, [{"id": "R-0001", "quote": masked}], [original], "masked", 4
+    )
+
+
+@pytest.mark.parametrize(
+    ("focus", "expected"),
+    [
+        ("a", "a b c d …"),
+        ("e f", "… d e f g …"),
+        ("j", "… g h i j"),
+    ],
+)
+def test_focus_window(focus: str, expected: str) -> None:
+    assert export.mask_quote("a b c d e f g h i j", 4, focus) == expected
+
+
+def test_short_focus_quote_and_budget_error() -> None:
+    assert export.mask_quote("a b c", 5, "b") == "a b c"
+    with pytest.raises(ValueError, match="longer than max_words"):
+        export.mask_quote("a b c d", 1, "b c")
+
+
+@pytest.mark.parametrize("level", ["masked", "locator"])
+@pytest.mark.parametrize("budget", [None, 5])
+def test_focus_removed_from_export(path: str, level: str, budget: int | None) -> None:
+    if level == "locator" and budget is not None:
+        return
+    add(path, quote_focus="40 to 3")
+    export.export_ledger(path, out_of(path), level, max_words=budget)
+    record = json.loads(Path(out_of(path)).read_text("utf-8").splitlines()[1])
+    assert "quote_focus" not in record
+    if level == "masked":
+        expected = "… from 40 to 3 per …" if budget else "Ledger records … per manuscript"
+        assert record["quote"] == expected
+
+
+def test_full_retains_focus(path: str) -> None:
+    add(path, quote_focus="40 to 3")
+    export.export_ledger(path, out_of(path))
+    record = json.loads(Path(out_of(path)).read_text("utf-8").splitlines()[1])
+    assert record["quote_focus"] == "40 to 3"
+
+
+def test_focus_budget_error_writes_nothing(path: str) -> None:
+    add(path, quote_focus="40 to 3")
+    with pytest.raises(ValueError, match="longer than max_words"):
+        export.export_ledger(path, out_of(path), "masked", max_words=2)
+    assert not Path(out_of(path)).exists()
+
+
+@pytest.mark.parametrize("quote", ["one…two three", "one … two three"])
+def test_literal_ellipsis_in_budget_export(path: str, quote: str) -> None:
+    add(path, quote=quote)
+    export.export_ledger(path, out_of(path), "masked", max_words=5)
+    record = json.loads(Path(out_of(path)).read_text("utf-8").splitlines()[1])
+    assert record["quote"] == quote
+
+
+def test_full_export_remains_a_valid_ledger(path: str) -> None:
+    add(path)
+    export.export_ledger(path, out_of(path))
+    assert ledger.validate_ledger(out_of(path)) == []

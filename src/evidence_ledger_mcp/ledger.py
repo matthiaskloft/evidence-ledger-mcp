@@ -18,15 +18,21 @@ Record = dict[str, Any]
 EVIDENCE_FIELDS = ("locator", "quote", "quote_hash", "justification")
 
 
-def normalize(text: str) -> str:
-    """Normalization n1: NFKC, casefold, keep only letters and digits."""
+def normalize(text: str, version: str = "n2") -> str:
+    """Normalize with n2 (or legacy n1), keeping only letters and digits."""
+    if version not in ("n1", "n2"):
+        raise ValueError(f"Unsupported quote hash normalization: {version}")
     folded = unicodedata.normalize("NFKC", text).casefold()
+    if version == "n2":
+        folded = unicodedata.normalize("NFKC", folded)
     return "".join(c for c in folded if unicodedata.category(c)[0] in "LN")
 
 
-def quote_hash(quote: str) -> str:
-    """Hash a quote after normalization n1."""
-    return "sha256-n1:" + hashlib.sha256(normalize(quote).encode("utf-8")).hexdigest()
+def quote_hash(quote: str, version: str = "n2") -> str:
+    """Hash a quote with n2 by default; n1 remains available for verification."""
+    return (
+        f"sha256-{version}:" + hashlib.sha256(normalize(quote, version).encode("utf-8")).hexdigest()
+    )
 
 
 def _dumps(obj: object) -> str:
@@ -199,7 +205,12 @@ def validate_ledger(path: str) -> list[str]:
         if (
             isinstance(quote, str)
             and "quote_hash" in record
-            and record["quote_hash"] != (quote_hash(quote))
+            and (
+                not isinstance(record["quote_hash"], str)
+                or record["quote_hash"].split(":")[0] not in ("sha256-n1", "sha256-n2")
+                or record["quote_hash"]
+                != quote_hash(quote, record["quote_hash"].split(":")[0].removeprefix("sha256-"))
+            )
         ):
             problems.append(f"{label}: quote_hash does not match quote")
         # A non-string importance is already reported above and cannot go into a set.

@@ -32,6 +32,16 @@ def schema_version() -> str:
     return match[1]
 
 
+def header_errors(header: dict[str, Any]) -> list[str]:
+    """Return one message per violation of the ledger header, empty if valid."""
+    schema = {"$ref": "#/$defs/header", "$defs": load_schema()["$defs"]}
+    validator = Draft202012Validator(schema)
+    return [
+        f"{'/'.join(map(str, error.absolute_path)) or '<header>'}: {error.message}"
+        for error in sorted(validator.iter_errors(header), key=lambda e: list(e.absolute_path))
+    ]
+
+
 def record_errors(record: dict[str, Any]) -> list[str]:
     """Return one message per schema violation, empty if the record is valid."""
     validator = Draft202012Validator(load_schema())

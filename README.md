@@ -15,7 +15,9 @@ When an LLM agent or a person adds a citation, the ledger records what is claime
 
 ## The schema
 
-[`schema/evidence-ledger.schema.json`](schema/evidence-ledger.schema.json) (JSON Schema 2020-12) describes one record. A ledger is a list of records, kept as YAML or JSON next to the manuscript.
+[`schema/evidence-ledger.schema.json`](schema/evidence-ledger.schema.json) (JSON Schema 2020-12) describes one record. A ledger is a list of records, kept next to the manuscript.
+
+**File format.** The schema is format-neutral: it validates parsed records, so a ledger can be JSON, JSON Lines or YAML. The MCP server will store ledgers as JSON Lines (`.jsonl`, one record per line), because new records are appended as single lines, concurrent additions rarely conflict, and agents write JSON reliably. YAML is accepted for records written by hand and as a readable export; quote dates in YAML (`date: "2026-10-30"`), since unquoted dates are not read as text.
 
 Each record contains:
 

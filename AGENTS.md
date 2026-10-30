@@ -18,6 +18,7 @@ Every citation we add to this repository (README, docs, code comments, schema de
 - Keep **separate ledgers** for the two contributions:
   - `ledger/schema.yaml` for citations in the schema, its documentation and the README sections about it.
   - `ledger/server.yaml` for citations in the MCP server code and its documentation.
+- The ledgers are YAML for now and move to JSON Lines (`ledger/schema.jsonl`, `ledger/server.jsonl`) once the MCP server writes them; convert them then, in one step.
 - The ledgers are **private**. `ledger/` is git-ignored because records hold verbatim quotes from copyrighted sources. Never commit a ledger, force-add it, or copy quotes from it into tracked files.
 - Add or update the record in the same change that adds or edits the citation, and check that its `anchor.exact` text still appears in the file.
 - Recompute `quote_hash` whenever a quote changes, and validate the ledger against the schema before committing.

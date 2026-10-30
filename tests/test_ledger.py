@@ -206,3 +206,8 @@ def test_add_record_refuses_what_validation_flags(path: str) -> None:
 def test_header_with_bom_is_read(path: str) -> None:
     Path(path).write_bytes(b"\xef\xbb\xbf" + Path(path).read_bytes())
     assert add(path)["id"] == "R-0001"
+
+
+def test_validate_reports_unhashable_importance(path: str) -> None:
+    rewrite_line(path, 1, {**add(path), "importance": ["critical"]})
+    assert any(p.startswith("R-0001: importance") for p in ledger.validate_ledger(path))

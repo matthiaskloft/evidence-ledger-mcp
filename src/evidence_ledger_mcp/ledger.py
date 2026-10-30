@@ -198,7 +198,8 @@ def validate_ledger(path: str) -> list[str]:
             and record["quote_hash"] != (quote_hash(quote))
         ):
             problems.append(f"{label}: quote_hash does not match quote")
-        if "claim_id" in record:
+        # A non-string importance is already reported above and cannot go into a set.
+        if "claim_id" in record and isinstance(record.get("importance"), str | None):
             importance.setdefault(str(record["claim_id"]), set()).add(record.get("importance"))
     problems += [
         f"{claim}: records disagree on importance"

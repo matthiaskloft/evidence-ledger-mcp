@@ -41,3 +41,7 @@ def test_missing_field_is_reported() -> None:
 def test_tools_wrap_the_schema_module() -> None:
     assert schema_info() == {"schema_version": schema_version()}
     assert validate_record(RECORD) == []
+
+
+def test_focus_requires_quote() -> None:
+    assert any("quote" in error for error in record_errors({**RECORD, "quote_focus": "phrase"}))

@@ -5,9 +5,9 @@
 
 Fails when a tracked or staged file
 - lies under ledger/ (the private ledgers),
-- is YAML or JSON with quote, quote_prefix or quote_suffix fields,
+- is YAML or JSON with quote, quote_prefix, quote_suffix or quote_focus fields,
 - contains an email address other than a noreply address,
-- (--staged only) contains a quote, prefix or suffix from ledger/*.yaml, compared after
+- (--staged only) contains a quote, prefix, suffix or focus from ledger/*.yaml, compared after
   normalization n1.
 Findings name the file and record, never the quoted text.
 """
@@ -29,8 +29,10 @@ except ImportError:
 
 EMAIL = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
 ALLOWED_EMAIL = re.compile(r"(@users\.noreply\.github\.com|^noreply@anthropic\.com)$")
-QUOTE_KEYS = {"quote", "quote_prefix", "quote_suffix"}
-QUOTE_FIELD = re.compile(r"""(?<![\w-])["']?(quote|quote_prefix|quote_suffix)["']?\s*:""")
+QUOTE_KEYS = {"quote", "quote_prefix", "quote_suffix", "quote_focus"}
+QUOTE_FIELD = re.compile(
+    r"""(?<![\w-])["']?(quote|quote_prefix|quote_suffix|quote_focus)["']?\s*:"""
+)
 MIN_QUOTE_CHARS = 20  # normalized length; shorter text would match by chance
 
 
@@ -91,7 +93,7 @@ def ledger_quotes() -> list[tuple[str, str]]:
             for rec in records:
                 if "ledger" in rec:  # JSON Lines header line
                     continue
-                for field in ("quote", "quote_prefix", "quote_suffix"):
+                for field in sorted(QUOTE_KEYS):
                     norm = normalize(rec.get(field) or "")
                     if len(norm) >= MIN_QUOTE_CHARS:
                         quotes.append((f"{path} {rec.get('id')} {field}", norm))

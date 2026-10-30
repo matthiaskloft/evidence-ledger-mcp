@@ -4,7 +4,7 @@
 
 This repository holds two separate contributions:
 
-1. **The evidence ledger schema** (`schema/`): a format for structured records that make every citation in a work (a manuscript, software or other) checkable. It stands on its own: any tool or agent can write and check ledgers with it, without our server. Status: draft v0.3.0, may still change in breaking ways.
+1. **The evidence ledger schema** (`schema/`): a format for structured records that make every citation in a work (a manuscript, software or other) checkable. It stands on its own: any tool or agent can write and check ledgers with it, without our server. Status: draft v0.4.0, may still change in breaking ways.
 2. **The evidence ledger MCP server** (`src/`, Python package `evidence-ledger-mcp`): a tool through which agents write and check ledgers that follow the schema. Status: early; it creates, appends to, searches, validates and withdraws records in JSON Lines ledgers (roadmap 0.1) and exports them at the levels full, masked or locator (roadmap 0.2), and writes an HTML summary grouped by claim that prints to PDF (roadmap 0.3). Checks are planned.
 
 The two have separate version numbers. Schema releases are tagged `schema-vX.Y.Z`; the server will state which schema versions it supports. The schema will move to a repository of its own before v1.0.
@@ -36,9 +36,13 @@ Each record contains:
 
 Every claim counts as `contestable` by default and then needs locator, quote, hash and justification. Marking a claim as not contestable needs a `contestable_reason`. Evidence that contradicts a claim is recorded with `relation: contrasts`, not dropped.
 
-`note` (per record) and `notes` (in the header) are free-text comments, the JSON counterpart of comments in a YAML file. They are exported with the ledger, so they must never contain source text; quotes belong only in `quote`, `quote_prefix` and `quote_suffix`.
+`note` (per record) and `notes` (in the header) are free-text comments, the JSON counterpart of comments in a YAML file. They are exported with the ledger, so they must never contain source text; source text belongs only in `quote`, `quote_prefix`, `quote_suffix` and `quote_focus`.
 
-`quote_hash` is `sha256-n1:` plus the SHA-256 of the quote after normalization n1: Unicode NFKC, casefold, keep only letters and digits. The hash then survives differences between copies of a source, such as whitespace, hyphenation and quote styles.
+`quote_hash` is `sha256-n2:` plus the SHA-256 of the UTF-8 quote after normalization n2: Unicode NFKC, casefold, NFKC again, keep only letters and digits. Legacy `sha256-n1:` hashes omit the second NFKC and remain valid and checkable. The hash then survives differences between copies of a source, such as whitespace, hyphenation and quote styles.
+
+`quote_focus` optionally marks the phrase within `quote` that carries the claim. It must occur exactly once, cover whole whitespace-delimited words, and contain at most 25 words. It is source text and is removed from masked and locator exports.
+
+Masked exports accept `max_words` from 1 to 25. With a focus they keep a centred window, shifting at the quote edges to use the budget; otherwise they keep the start and end. Cuts are marked with “…”; quotes shorter than the budget stay whole. A focus longer than the budget is refused. Without `max_words`, masking still keeps only the first and last words (at most three each and half the quote), even with a focus. The export header records `level` and `max_words`.
 
 ## How to use it
 
@@ -58,7 +62,7 @@ A minimal record:
   no_identifier_reason: "Invented source for this example"
   locator: {page: 4}
   quote: "Ledger records reduced unchecked citations from 40 to 3 per manuscript"
-  quote_hash: sha256-n1:3b8d67a25018dccc865ee88b24c10aa4a5b553e41ff28ebc46936a71eee7db3c
+  quote_hash: sha256-n2:3b8d67a25018dccc865ee88b24c10aa4a5b553e41ff28ebc46936a71eee7db3c
   relation: supports
   justification: "The quoted sentence states both counts."
   retrieved_via: pdf

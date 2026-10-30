@@ -12,7 +12,7 @@ from evidence_ledger_mcp import embed, ledger
 
 HTML_SUFFIXES = (".html", ".htm")
 ENTRY_FIELDS = ("locator", "quote", "justification")
-_BIB_START = re.compile(r"^\s*@\s*(\w+)\s*([{(])", re.M)
+_BIB_START = re.compile(r"@\s*(\w+)\s*([{(])")
 _BIB_KEY = re.compile(r"\s*([^,\s]+)\s*,")
 _BIB_NON_ENTRIES = {"string", "comment", "preamble"}
 
@@ -49,15 +49,15 @@ def _block_end(text: str, pos: int, opening: str) -> int:
 
 
 def _bib_keys(text: str) -> set[str]:
-    """Entry keys, skipping the whole body of @comment, @preamble and @string blocks."""
+    """Entry keys; each block's body is skipped whole, so an `@` inside a value or inside
+    @comment, @preamble and @string blocks starts no entry."""
     keys: set[str] = set()
     pos = 0
     while start := _BIB_START.search(text, pos):
         pos = start.end()
-        if start.group(1).lower() in _BIB_NON_ENTRIES:
-            pos = _block_end(text, pos, start.group(2))
-        elif key := _BIB_KEY.match(text, pos):
+        if start.group(1).lower() not in _BIB_NON_ENTRIES and (key := _BIB_KEY.match(text, pos)):
             keys.add(key.group(1))
+        pos = _block_end(text, pos, start.group(2))
     return keys
 
 

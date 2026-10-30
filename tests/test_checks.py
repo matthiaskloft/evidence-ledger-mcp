@@ -261,13 +261,14 @@ def test_empty_normalized_quote_and_anchor_are_not_found(path: str) -> None:
     assert result["anchors"]["not_found"] == [quote]
 
 
-def test_bib_keys_come_from_line_starts_only(path: str) -> None:
+def test_bib_keys_skip_values_and_allow_entries_on_one_line(path: str) -> None:
     bib = write(
         path,
         "refs.bib",
-        "@article{realKey,\n  note = {see @fake{fakeKey, x}},\n}\n  @book{indented,\n}\n",
+        "@article{realKey,\n  note = {see @fake{fakeKey, x}},\n}\n  @book{indented,\n}\n"
+        "@article{first, title={A}} @article(second, title={B})\n",
     )
-    assert checks.bibliography_keys(bib) == {"realKey", "indented"}
+    assert checks.bibliography_keys(bib) == {"realKey", "indented", "first", "second"}
 
 
 def test_bib_comment_blocks_hide_their_entries(path: str) -> None:

@@ -7,3 +7,4 @@ Changes to the MCP server package `evidence-ledger-mcp`. Schema changes are rele
 ### Added
 
 - Package scaffold: a stub server with the tools `schema_info` and `validate_record`, linting (ruff), type checking (mypy, strict), tests, and CI and release workflows.
+- Core ledger tools (roadmap 0.1): `create_ledger`, `add_record`, `get_record`, `find_records`, `validate_ledger` and `withdraw_record`, storing ledgers as JSON Lines. The server assigns record and claim IDs, computes `quote_hash` and fills in the provenance date.

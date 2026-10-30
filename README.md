@@ -5,7 +5,7 @@
 This repository holds two separate contributions:
 
 1. **The evidence ledger schema** (`schema/`): a format for structured records that make every citation in a work (a manuscript, software or other) checkable. It stands on its own: any tool or agent can write and check ledgers with it, without our server. Status: draft v0.3.0, may still change in breaking ways.
-2. **The evidence ledger MCP server** (`src/`, Python package `evidence-ledger-mcp`): a tool through which agents write and check ledgers that follow the schema. Status: stub; it only reports the schema version and validates single records.
+2. **The evidence ledger MCP server** (`src/`, Python package `evidence-ledger-mcp`): a tool through which agents write and check ledgers that follow the schema. Status: early; it creates, appends to, searches, validates and withdraws records in JSON Lines ledgers (roadmap 0.1). Export and checks are planned.
 
 The two have separate version numbers. Schema releases are tagged `schema-vX.Y.Z`; the server will state which schema versions it supports. The schema will move to a repository of its own before v1.0.
 

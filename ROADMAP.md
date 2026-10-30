@@ -20,6 +20,7 @@ Every export is produced at one of the levels `full`, `masked` or `locator`, and
 - **Ledger summary**: a standalone report of all records, grouped by claim, in HTML and PDF.
 - **Machine-readable export**: the ledger as JSON or JSON Lines at the chosen level, for reviewers, journals and other tools.
 - Links from each record's `key` to the work's bibliography.
+- Links from each record to the source in the reader's own library (a Zotero item or a local PDF, opened at the page of the passage), read from a local link file (see 0.3). Without it, exports link to the DOI or URL.
 - Annotations readable without hovering and in print.
 
 ## 0.3: checks
@@ -27,6 +28,17 @@ Every export is produced at one of the levels `full`, `masked` or `locator`, and
 - Check that each anchor still appears in the work, and flag records assessed against an earlier revision of it.
 - Re-check quotes against source text passed in by the agent or fetched from a public URL.
 - A gap report: contestable claims without locator, quote or justification, claims without records, and citation keys missing from the bibliography.
+
+### Link resolution
+
+A ledger carries only portable identifiers (DOI, ISBN, URL, title), the locator and `quote_hash`; nothing specific to one computer. Whoever opens a ledger, its author or a recipient, can resolve the links against their own library:
+
+- Match each source in a local Zotero library or a folder of PDFs, by DOI, ISBN, URL and title.
+- Find the passage in the reader's copy by its `quote_hash`; normalization n1 keeps the hash stable across publisher PDFs, preprints and text extraction.
+- Write the result to a local link file that stays on the reader's computer and is never shared.
+- Report per record: passage found, source found but passage not found, or source not in the library. A found passage confirms the record independently.
+
+A recipient can then rebuild the links in an export without the author's files.
 
 ## Testing throughout
 

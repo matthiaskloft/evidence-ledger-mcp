@@ -14,7 +14,9 @@ from evidence_ledger_mcp.ledger import Record
 LEVELS = ("full", "masked", "locator")
 FORMATS = ("json", "jsonl")
 SOURCE_FIELDS = ("quote", "quote_prefix", "quote_suffix")
-MIN_WORDS = 4
+# Letters and digits a shared run must reach to count as copied source text.
+WINDOW = 24
+WORK_FIELDS = ("claim", "anchor")
 
 
 def mask_quote(quote: str) -> str:
@@ -54,26 +56,40 @@ def _strings(value: object) -> Iterator[str]:
             yield from _strings(item)
 
 
-def _source_texts(record: Record) -> list[str]:
-    texts = (record.get(field) for field in SOURCE_FIELDS)
-    return [
-        ledger.normalize(t) for t in texts if isinstance(t, str) and len(t.split()) >= MIN_WORDS
-    ]
+def _windows(record: Record) -> set[str]:
+    """Every WINDOW-character run of the record's normalized source text."""
+    runs: set[str] = set()
+    for field in SOURCE_FIELDS:
+        if isinstance(text := record.get(field), str):
+            norm = ledger.normalize(text)
+            runs.update(norm[i : i + WINDOW] for i in range(len(norm) - WINDOW + 1))
+    return runs
+
+
+def _leaks(value: object, windows: set[str]) -> bool:
+    for text in _strings(value):
+        norm = ledger.normalize(text)
+        if any(norm[i : i + WINDOW] in windows for i in range(len(norm) - WINDOW + 1)):
+            return True
+    return False
 
 
 def publication_problems(
     header: dict[str, Any], exported: list[Record], originals: list[Record], level: str
 ) -> list[str]:
-    """Where an export at this level still contains source text from any original record."""
+    """Where an export at this level still contains a run of source text from any record."""
     if level == "full":
         return []
-    sources = [(str(r.get("id")), t) for r in originals for t in _source_texts(r)]
+    sources = [(str(r.get("id")), _windows(r)) for r in originals]
     problems = []
     for label, item in [("header", header), *((str(r.get("id")), r) for r in exported)]:
-        flat = ledger.normalize(" ".join(_strings(item)))
+        # The work's own text is public, and the masked quote is the level's allowance.
+        skip = {*WORK_FIELDS, *(["quote"] if level == "masked" else [])}
+        checked = {k: v for k, v in item.items() if k not in skip}
         problems += [
             f"{label}: contains source text from {source}"
-            for source in dict.fromkeys(s for s, text in sources if text and text in flat)
+            for source, windows in sources
+            if _leaks(checked, windows)
         ]
     return problems
 

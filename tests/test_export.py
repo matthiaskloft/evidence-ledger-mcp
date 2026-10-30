@@ -184,3 +184,29 @@ def test_invalid_level_and_format(path: str) -> None:
         export.export_ledger(path, out_of(path), "partial")
     with pytest.raises(ValueError, match="format"):
         export.export_ledger(path, out_of(path), format="csv")
+
+
+def test_check_catches_part_of_a_quote(path: str) -> None:
+    add(path)
+    add(path, quote=OTHER, note=" ".join(QUOTE.split()[2:-2]))
+    with pytest.raises(ValueError, match="R-0002"):
+        export.export_ledger(path, out_of(path), "locator")
+
+
+def test_check_catches_unspaced_script(path: str) -> None:
+    quote = "台帳の記録は原稿あたりの未確認の引用を四十件から三件に減らした"
+    add(path, quote=quote)
+    add(path, quote=OTHER, note=quote)
+    with pytest.raises(ValueError, match="R-0002"):
+        export.export_ledger(path, out_of(path), "locator")
+
+
+def test_stock_prefix_in_prose_passes(path: str) -> None:
+    add(path, quote_prefix="As shown in Table 2,")
+    add(path, quote=OTHER, note="As shown in Table 2, our sample differs.")
+    assert export.export_ledger(path, out_of(path), "locator")["records"] == 2
+
+
+def test_claim_may_echo_its_quote(path: str) -> None:
+    add(path, claim=f"Studies report that {QUOTE}.", anchor={"exact": QUOTE})
+    assert export.export_ledger(path, out_of(path), "masked")["records"] == 1

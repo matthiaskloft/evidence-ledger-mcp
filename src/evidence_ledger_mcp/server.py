@@ -90,7 +90,7 @@ def export_ledger(
 ) -> Record:
     """Export the ledger to a new file. `masked` keeps the first and last words of each quote,
     `locator` no quoted text; a publication check runs before writing, and `out` is never
-    overwritten."""
+    overwritten. A `full` export holds whole quotes: keep it private."""
     return export.export_ledger(path, out, level, format, include_withdrawn)
 
 

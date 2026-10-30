@@ -267,6 +267,7 @@ _OPEN = r"(?:[^>\"']|\"[^\"]*\"|'[^']*')*>"
 _HTML_OPEN = re.compile(r"<html\b" + _OPEN, re.I)
 _HEAD_OPEN = re.compile(r"<head\b" + _OPEN, re.I)
 _BODY_OPEN = re.compile(r"<body\b" + _OPEN, re.I)
+_BASE = re.compile(r"<base\b[^>]*\bhref\s*=", re.I)
 _HEAD_CLOSE = re.compile(r"</head\s*>", re.I)
 _BODY_CLOSE = re.compile(r"</body\s*>", re.I)
 _META = re.compile(r"<meta\b" + _OPEN, re.I)
@@ -575,7 +576,13 @@ def _inject(html: str, head_html: str) -> str:
 
 def _wrap_body(html: str, before: str, after: str) -> str:
     """Put `before` right after <body> and `after` before </body>, or around the whole text."""
-    opening = _first(html, _BODY_OPEN)
+    # Without a <body> tag, the body starts after the head (or <html>, or the doctype).
+    opening = (
+        _first(html, _BODY_OPEN)
+        or _first(html, _HEAD_CLOSE)
+        or _first(html, _HTML_OPEN)
+        or re.match(r"\s*<!doctype[^>]*>", html, re.I)
+    )
     at = opening.end() if opening else 0
     html = html[:at] + before + html[at:]
     closing = _tags(html, _BODY_CLOSE)
@@ -693,6 +700,8 @@ def embed_ledger(
     if problems := export.publication_problems(header, kept, records, level):
         raise ValueError("Publication check failed: " + "; ".join(problems))
     html = Path(work).read_text("utf-8")
+    if _first(html, _BASE):
+        raise ValueError("the work sets <base href>, which would send evidence links elsewhere")
     text, located, missing, overlapping = embed(html, header, kept, layout, level)
     with open(out, "x", encoding="utf-8", newline="\n") as handle:
         handle.write(text)

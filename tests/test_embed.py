@@ -383,3 +383,24 @@ def test_insertion_points_ignore_tags_inside_scripts_and_comments(path: str) -> 
     assert html.count(script) == 2
     assert html.index("<style>") > html.index("<!-- </head> -->")
     assert html.index('class="el-hint"') > html.index("<body>")
+
+
+def test_hint_follows_the_head_when_the_body_tag_is_omitted(path: str) -> None:
+    add(path)
+    work = (
+        "<!DOCTYPE html><html><head><title>W</title></head>"
+        "<p>Plain: cut unchecked citations.</p></html>"
+    )
+    _, html = run(path, work, layout="panel")
+    assert html.startswith("<!DOCTYPE html>")
+    assert html.index('class="el-hint"') > html.index("</head>")
+
+
+def test_refuses_a_work_with_a_base_url(path: str) -> None:
+    add(path)
+    folder = Path(path).parent
+    work = folder / "work.html"
+    work.write_text('<head><base href="https://example.org/"></head><p>x</p>', "utf-8")
+    with pytest.raises(ValueError, match="base"):
+        embed.embed_ledger(path, str(work), str(folder / "embedded.html"))
+    assert not (folder / "embedded.html").exists()

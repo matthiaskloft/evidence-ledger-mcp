@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Any
+from typing import Any, Literal
 
 from mcp.server.fastmcp import FastMCP
 
-from evidence_ledger_mcp import ledger
+from evidence_ledger_mcp import export, ledger
 from evidence_ledger_mcp.schema import record_errors, schema_version
 
 mcp = FastMCP(
@@ -78,6 +78,20 @@ def validate_ledger(path: str) -> list[str]:
 def withdraw_record(path: str, id: str, reason: str) -> Record:
     """Mark a record withdrawn with a reason instead of deleting it."""
     return ledger.withdraw_record(path, id, reason)
+
+
+@mcp.tool()
+def export_ledger(
+    path: str,
+    out: str,
+    level: Literal["full", "masked", "locator"] = "full",
+    format: Literal["json", "jsonl"] = "jsonl",
+    include_withdrawn: bool = False,
+) -> Record:
+    """Export the ledger to a new file. `masked` keeps the first and last words of each quote,
+    `locator` no quoted text; a publication check runs before writing, and `out` is never
+    overwritten."""
+    return export.export_ledger(path, out, level, format, include_withdrawn)
 
 
 def main() -> None:

@@ -18,11 +18,15 @@ Record = dict[str, Any]
 EVIDENCE_FIELDS = ("locator", "quote", "quote_hash", "justification")
 
 
+def normalize(text: str) -> str:
+    """Normalization n1: NFKC, casefold, keep only letters and digits."""
+    folded = unicodedata.normalize("NFKC", text).casefold()
+    return "".join(c for c in folded if unicodedata.category(c)[0] in "LN")
+
+
 def quote_hash(quote: str) -> str:
-    """Hash a quote after normalization n1: NFKC, casefold, keep only letters and digits."""
-    folded = unicodedata.normalize("NFKC", quote).casefold()
-    kept = "".join(c for c in folded if unicodedata.category(c)[0] in "LN")
-    return "sha256-n1:" + hashlib.sha256(kept.encode("utf-8")).hexdigest()
+    """Hash a quote after normalization n1."""
+    return "sha256-n1:" + hashlib.sha256(normalize(quote).encode("utf-8")).hexdigest()
 
 
 def _dumps(obj: object) -> str:
@@ -42,7 +46,7 @@ def _header(line: str) -> dict[str, Any] | None:
     return header if isinstance(header, dict) else None
 
 
-def _read(path: str) -> tuple[dict[str, Any], list[Record]]:
+def read(path: str) -> tuple[dict[str, Any], list[Record]]:
     """Parse a ledger strictly; raises ValueError naming the line that cannot be read."""
     lines = _lines(path)
     header = _header(lines[0]) if lines else None
@@ -105,7 +109,7 @@ def add_record(path: str, record: Record, provenance: dict[str, Any]) -> Record:
     for field in ("id", "withdrawn"):
         if field in record:
             raise ValueError(f"'{field}' is assigned by the server and cannot be supplied")
-    _, existing = _read(path)
+    _, existing = read(path)
     new: Record = {"id": _next_number([str(r.get("id", "")) for r in existing], "R"), **record}
     new.setdefault("claim_id", _next_number([str(r.get("claim_id", "")) for r in existing], "C"))
     if "quote" in new:
@@ -128,7 +132,7 @@ def add_record(path: str, record: Record, provenance: dict[str, Any]) -> Record:
 
 def get_record(path: str, id: str) -> Record:
     """Return the record with this id."""
-    for record in _read(path)[1]:
+    for record in read(path)[1]:
         if record.get("id") == id:
             return record
     raise ValueError(f"No record {id} in {path}")
@@ -144,7 +148,7 @@ def find_records(
 ) -> list[Record]:
     """Records matching all given filters; withdrawn ones only with `include_withdrawn`."""
     found = []
-    for record in _read(path)[1]:
+    for record in read(path)[1]:
         if "withdrawn" in record and not include_withdrawn:
             continue
         if claim_id is not None and record.get("claim_id") != claim_id:
@@ -211,7 +215,7 @@ def validate_ledger(path: str) -> list[str]:
 
 def withdraw_record(path: str, id: str, reason: str) -> Record:
     """Mark a record withdrawn with a reason; the record stays in the file."""
-    header, records = _read(path)
+    header, records = read(path)
     for record in records:
         if record.get("id") == id:
             if "withdrawn" in record:

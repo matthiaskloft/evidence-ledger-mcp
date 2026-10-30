@@ -1,0 +1,373 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://matthiaskloft.github.io/evidence-ledger-mcp/schema/0.2.0/evidence-ledger.schema.json",
+  "title": "Evidence ledger record (v0.2.0, draft)",
+  "description": "One record links a claim in a manuscript to the source passage that backs it. A ledger is a list of records. See schema/README.md.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "claim_id",
+    "claim",
+    "claim_type",
+    "contestable",
+    "anchor",
+    "key",
+    "relation",
+    "retrieved_via",
+    "provenance"
+  ],
+  "dependentRequired": {
+    "quote_prefix": [
+      "quote"
+    ],
+    "quote_suffix": [
+      "quote"
+    ],
+    "importance_reason": [
+      "importance"
+    ]
+  },
+  "$defs": {
+    "text": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "\\S"
+    }
+  },
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^R-[0-9]{4,}$"
+    },
+    "claim_id": {
+      "type": "string",
+      "pattern": "^C-[0-9]{4,}$"
+    },
+    "claim": {
+      "$ref": "#/$defs/text"
+    },
+    "claim_type": {
+      "enum": [
+        "empirical",
+        "definition",
+        "method",
+        "background"
+      ],
+      "description": "Descriptive only; contestable decides which evidence is required"
+    },
+    "importance": {
+      "enum": [
+        "critical",
+        "substantial",
+        "supporting"
+      ],
+      "description": "Dependence of this work on the claim; omitted means unassessed. Records sharing a claim_id must agree. Sets a minimum review depth without lowering the project default."
+    },
+    "importance_reason": {
+      "$ref": "#/$defs/text",
+      "description": "Why the work depends on this claim to the stated degree; optional, requires importance"
+    },
+    "contestable": {
+      "type": "boolean",
+      "default": true,
+      "description": "true = full evidence required (Moravcsik's active citation). Defaults to true; setting false needs contestable_reason"
+    },
+    "contestable_reason": {
+      "$ref": "#/$defs/text",
+      "description": "Why the claim needs no full evidence, e.g. uncontested background"
+    },
+    "anchor": {
+      "type": "object",
+      "additionalProperties": false,
+      "anyOf": [
+        {
+          "required": [
+            "marker"
+          ]
+        },
+        {
+          "required": [
+            "exact"
+          ]
+        }
+      ],
+      "properties": {
+        "marker": {
+          "$ref": "#/$defs/text"
+        },
+        "exact": {
+          "$ref": "#/$defs/text"
+        },
+        "prefix": {
+          "type": "string"
+        },
+        "suffix": {
+          "type": "string"
+        }
+      }
+    },
+    "key": {
+      "$ref": "#/$defs/text"
+    },
+    "doi": {
+      "type": "string",
+      "pattern": "^10\\.[0-9]{4,}/\\S+$"
+    },
+    "isbn": {
+      "type": "string",
+      "pattern": "^[0-9Xx -]{10,17}$"
+    },
+    "url": {
+      "type": "string",
+      "pattern": "^https?://\\S+$",
+      "description": "Stable link to a published resource, e.g. a repository or archive"
+    },
+    "no_identifier_reason": {
+      "$ref": "#/$defs/text",
+      "description": "Why the source has no DOI, ISBN or URL, e.g. internal document"
+    },
+    "locator": {
+      "type": "object",
+      "additionalProperties": false,
+      "anyOf": [
+        {
+          "required": [
+            "page"
+          ]
+        },
+        {
+          "required": [
+            "section"
+          ]
+        },
+        {
+          "required": [
+            "figure"
+          ]
+        },
+        {
+          "required": [
+            "table"
+          ]
+        }
+      ],
+      "properties": {
+        "page": {
+          "type": [
+            "integer",
+            "string"
+          ],
+          "minLength": 1
+        },
+        "section": {
+          "$ref": "#/$defs/text"
+        },
+        "figure": {
+          "$ref": "#/$defs/text"
+        },
+        "table": {
+          "$ref": "#/$defs/text"
+        },
+        "chunk": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "index",
+            "sha256"
+          ],
+          "description": "Lookup hint into the full-text index (zotero-fulltext); a stale hint falls back to search. Dropped from exports.",
+          "properties": {
+            "attachment": {
+              "$ref": "#/$defs/text",
+              "description": "Attachment key, when the citation key has several"
+            },
+            "index": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          }
+        }
+      }
+    },
+    "quote": {
+      "$ref": "#/$defs/text"
+    },
+    "quote_prefix": {
+      "$ref": "#/$defs/text",
+      "description": "Source text right before the quote; tells repeated occurrences apart (W3C TextQuoteSelector)"
+    },
+    "quote_suffix": {
+      "$ref": "#/$defs/text",
+      "description": "Source text right after the quote"
+    },
+    "quote_hash": {
+      "type": "string",
+      "pattern": "^sha256-n[0-9]+:[0-9a-f]{64}$",
+      "description": "sha256 of the quote after normalization n1: Unicode NFKC, casefold, keep only letters and digits"
+    },
+    "relation": {
+      "enum": [
+        "supports",
+        "partially_supports",
+        "background",
+        "method",
+        "contrasts"
+      ]
+    },
+    "justification": {
+      "$ref": "#/$defs/text"
+    },
+    "retrieved_via": {
+      "enum": [
+        "zotero-fulltext",
+        "pdf",
+        "web",
+        "human",
+        "memory"
+      ]
+    },
+    "found_via": {
+      "type": "object",
+      "required": [
+        "route"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "route": {
+          "enum": [
+            "memory",
+            "web_search",
+            "database_search",
+            "cited_in",
+            "coauthor",
+            "other"
+          ]
+        },
+        "source": {
+          "type": "string",
+          "description": "Cite key or DOI of the citing reference, search query, or note"
+        }
+      }
+    },
+    "zotero_link": {
+      "type": "string",
+      "pattern": "^zotero://\\S+$"
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "by_type",
+        "by",
+        "date"
+      ],
+      "properties": {
+        "by_type": {
+          "enum": [
+            "agent",
+            "human"
+          ]
+        },
+        "by": {
+          "$ref": "#/$defs/text",
+          "description": "Name of the person, or of the agent tool (e.g. Claude Code)"
+        },
+        "model": {
+          "$ref": "#/$defs/text",
+          "description": "Model and version; required when by_type is agent"
+        },
+        "manuscript_rev": {
+          "$ref": "#/$defs/text"
+        },
+        "date": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+        }
+      },
+      "if": {
+        "properties": {
+          "by_type": {
+            "const": "agent"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "model"
+        ]
+      }
+    },
+    "withdrawn": {
+      "$ref": "#/$defs/text",
+      "description": "Set when the authors withdraw this citation: the reason. Review status (open, checked, disputed, unverifiable) is derived from the review log, not stored here"
+    },
+    "derived_from": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Reserved: own inferences"
+    },
+    "evidence_kind": {
+      "enum": [
+        "literature",
+        "analysis_output"
+      ],
+      "default": "literature",
+      "description": "Reserved: claims about own results"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "contestable": {
+            "const": true
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "locator",
+          "quote",
+          "quote_hash",
+          "justification"
+        ]
+      },
+      "else": {
+        "required": [
+          "contestable_reason"
+        ]
+      }
+    },
+    {
+      "anyOf": [
+        {
+          "required": [
+            "doi"
+          ]
+        },
+        {
+          "required": [
+            "isbn"
+          ]
+        },
+        {
+          "required": [
+            "url"
+          ]
+        },
+        {
+          "required": [
+            "no_identifier_reason"
+          ]
+        }
+      ]
+    }
+  ]
+}

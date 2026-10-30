@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import socket
 import threading
 import time
 from collections.abc import Iterator
@@ -32,6 +33,7 @@ HTML = (
     f"<body><p>{QUOTE}.</p></body></html>"
 )
 PUBLIC = "93.184.216.34"
+LOCAL = ["127.0.0.1"]
 
 
 def page(
@@ -54,7 +56,9 @@ class Net:
         monkeypatch.setattr(fetch, "_resolve", lambda host, port: self.hosts.get(host, [PUBLIC]))
         monkeypatch.setattr(fetch, "_open", self.open)
 
-    def open(self, url: str, timeout: float, max_bytes: int) -> fetch.Response:
+    def open(
+        self, url: str, addresses: list[str], timeout: float, max_bytes: int
+    ) -> fetch.Response:
         if url not in self.pages:
             raise fetch.FetchError("HTTP 404")
         return self.pages[url]
@@ -229,9 +233,9 @@ def base() -> Iterator[str]:
 
 
 def test_open_returns_redirects_and_plain_pages(base: str) -> None:
-    redirect = fetch._open(f"{base}/redirect", 5, 1000)
+    redirect = fetch._open(f"{base}/redirect", LOCAL, 5, 1000)
     assert (redirect.status, redirect.location) == (302, "/ok")
-    page_ = fetch._open(f"{base}/ok", 5, 1000)
+    page_ = fetch._open(f"{base}/ok", LOCAL, 5, 1000)
     assert (page_.content_type, page_.body) == ("text/plain", b"hello")
 
 
@@ -242,25 +246,25 @@ def test_open_failures_become_short_reasons(base: str) -> None:
         ("/big", "too large"),
     ]:
         with pytest.raises(fetch.FetchError) as caught:
-            fetch._open(base + route, 5, 1000)
+            fetch._open(base + route, LOCAL, 5, 1000)
         assert str(caught.value) == reason
     with pytest.raises(fetch.FetchError, match="bad url"):
-        fetch._open("http://[::1", 5, 1000)
+        fetch._open("http://[::1", LOCAL, 5, 1000)
     with pytest.raises(fetch.FetchError, match="bad url"):
-        fetch._open(f"{base}/a b", 5, 1000)
+        fetch._open(f"{base}/a b", LOCAL, 5, 1000)
     with pytest.raises(fetch.FetchError, match="network error"):
-        fetch._open("http://127.0.0.1:1/", 5, 1000)
+        fetch._open("http://127.0.0.1:1/", LOCAL, 5, 1000)
 
 
 def test_open_enforces_a_total_deadline(base: str) -> None:
     started = time.monotonic()
     with pytest.raises(fetch.FetchError, match="timeout"):
-        fetch._open(f"{base}/drip", 0.3, 1000)
+        fetch._open(f"{base}/drip", LOCAL, 0.3, 1000)
     assert time.monotonic() - started < 1.5
 
 
 def test_missing_content_type_is_unsupported(base: str) -> None:
-    reply = fetch._open(f"{base}/notype", 5, 1000)
+    reply = fetch._open(f"{base}/notype", LOCAL, 5, 1000)
     assert reply.content_type == ""
     with pytest.raises(fetch.FetchError) as caught:
         fetch._text(reply)
@@ -332,3 +336,47 @@ def test_bad_urls_are_reported_not_raised(
 def test_real_page_is_fetched(path: str) -> None:
     text = fetch.fetch_text("https://example.com")
     assert "documentation examples" in text
+
+
+def test_connection_is_pinned_to_the_checked_address(
+    base: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    real = socket.getaddrinfo
+
+    def no_names(host: str, *args: Any, **kwargs: Any) -> Any:
+        assert host == "127.0.0.1", "resolved the hostname again"
+        return real(host, *args, **kwargs)
+
+    monkeypatch.setattr(socket, "getaddrinfo", no_names)
+    port = base.rsplit(":", 1)[1]
+    reply = fetch._open(f"http://pinned.test:{port}/ok", LOCAL, 5, 1000)
+    assert reply.body == b"hello"
+
+
+def test_header_drip_hits_the_total_deadline() -> None:
+    server = socket.create_server(("127.0.0.1", 0))
+
+    def drip() -> None:
+        conn, _ = server.accept()
+        try:
+            conn.recv(4096)
+            for byte in b"HTTP/1.1 200 OK\r\nX-A: " + b"a" * 100:
+                conn.sendall(bytes([byte]))
+                time.sleep(0.05)
+        except OSError:
+            pass
+        finally:
+            conn.close()
+
+    threading.Thread(target=drip, daemon=True).start()
+    started = time.monotonic()
+    try:
+        with pytest.raises(fetch.FetchError, match="timeout"):
+            fetch._open(f"http://127.0.0.1:{server.getsockname()[1]}/", LOCAL, 0.3, 1000)
+    finally:
+        server.close()
+    assert time.monotonic() - started < 1.5
+
+
+def test_unusable_charset_falls_back_to_utf8() -> None:
+    assert fetch._text(page(QUOTE, "text/plain", charset="idna")) == QUOTE

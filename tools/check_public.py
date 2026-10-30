@@ -11,6 +11,7 @@ Fails when a tracked or staged file
 Findings name the file and record, never the quoted text.
 """
 import glob
+import json
 import re
 import subprocess
 import sys
@@ -69,9 +70,13 @@ def ledger_quotes():
     import yaml
 
     quotes = []
-    for path in sorted(glob.glob("ledger/*.yaml")):
+    for path in sorted(glob.glob("ledger/*.yaml") + glob.glob("ledger/*.jsonl")):
         with open(path, encoding="utf-8") as f:
-            for rec in yaml.safe_load(f) or []:
+            if path.endswith(".jsonl"):
+                records = [json.loads(line) for line in f if line.strip()]
+            else:
+                records = yaml.safe_load(f) or []
+            for rec in records:
                 for field in ("quote", "quote_prefix", "quote_suffix"):
                     norm = normalize(rec.get(field) or "")
                     if len(norm) >= MIN_QUOTE_CHARS:
@@ -88,7 +93,7 @@ def main():
             problems.append(f"{path}: private ledger file")
             continue
         text = content(path, staged)
-        is_data = path.endswith((".yaml", ".yml", ".json")) and not path.endswith(".schema.json")
+        is_data = path.endswith((".yaml", ".yml", ".json", ".jsonl")) and not path.endswith(".schema.json")
         if is_data and has_quote_fields(text):
             problems.append(f"{path}: has quote fields; publish only masked or locator exports")
         for email in sorted(set(EMAIL.findall(text))):

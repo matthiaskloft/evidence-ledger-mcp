@@ -4,16 +4,17 @@ build-backend = "hatchling.build"
 
 [project]
 name = "evidence-ledger-mcp"
-version = "0.0.1"
+version = "0.1.0"
 description = "MCP server through which agents write and check evidence ledgers for the citations in a work."
 readme = "README.md"
+license = { file = "LICENSE" }
 authors = [
   { name = "Matthias Kloft" },
 ]
 requires-python = ">=3.11"
 keywords = ["mcp", "citations", "evidence", "research", "active-citation"]
 classifiers = [
-  "Development Status :: 1 - Planning",
+  "Development Status :: 3 - Alpha",
   "Operating System :: OS Independent",
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3.11",
@@ -48,6 +49,7 @@ packages = ["src/evidence_ledger_mcp"]
 # The schema has one source, schema/; the wheel carries a copy inside the package.
 [tool.hatch.build.targets.wheel.force-include]
 "schema/evidence-ledger.schema.json" = "evidence_ledger_mcp/evidence-ledger.schema.json"
+"schema/LICENSE" = "evidence_ledger_mcp/SCHEMA-LICENSE"
 
 [tool.hatch.build.targets.sdist]
 include = ["/src", "/schema", "/tests", "/CHANGELOG.md"]

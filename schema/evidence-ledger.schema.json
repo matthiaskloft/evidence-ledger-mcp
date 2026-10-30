@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://matthiaskloft.github.io/evidence-ledger-mcp/schema/0.2.0/evidence-ledger.schema.json",
-  "title": "Evidence ledger record (v0.2.0, draft)",
-  "description": "One record links a claim in a manuscript to the source passage that backs it. A ledger is a list of records. See schema/README.md.",
+  "$id": "https://matthiaskloft.github.io/evidence-ledger-mcp/schema/0.3.0/evidence-ledger.schema.json",
+  "title": "Evidence ledger record (v0.3.0, draft)",
+  "description": "One record links a claim in a work (a manuscript, software or other) to the source passage that backs it. A ledger is a list of records, optionally preceded by a header ($defs/header); see README.md for the file shapes.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -33,6 +33,59 @@
       "type": "string",
       "minLength": 1,
       "pattern": "\\S"
+    },
+    "header": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "work"
+      ],
+      "description": "Ledger-level metadata. In JSON or YAML: {\"ledger\": header, \"records\": [...]}; in JSON Lines: the first line, {\"ledger\": header}.",
+      "properties": {
+        "schema_version": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$",
+          "description": "Version of this schema the records follow"
+        },
+        "work": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "title",
+            "type"
+          ],
+          "description": "The work whose citations this ledger records",
+          "properties": {
+            "title": {
+              "$ref": "#/$defs/text"
+            },
+            "type": {
+              "enum": [
+                "manuscript",
+                "software",
+                "dataset",
+                "other"
+              ]
+            },
+            "location": {
+              "$ref": "#/$defs/text",
+              "description": "File, repository or URL of the work"
+            }
+          }
+        },
+        "description": {
+          "$ref": "#/$defs/text"
+        },
+        "created": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+        },
+        "notes": {
+          "$ref": "#/$defs/text",
+          "description": "Free text about the ledger as a whole. Exported with the ledger: never paste source text here"
+        }
+      }
     }
   },
   "properties": {
@@ -221,6 +274,10 @@
     },
     "justification": {
       "$ref": "#/$defs/text"
+    },
+    "note": {
+      "$ref": "#/$defs/text",
+      "description": "Free-text comment on this record. Exported with the ledger: never paste source text here; quotes belong in quote"
     },
     "retrieved_via": {
       "enum": [

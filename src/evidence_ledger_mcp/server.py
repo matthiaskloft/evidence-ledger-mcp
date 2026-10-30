@@ -130,7 +130,8 @@ def embed_ledger(
     text are listed under "Not located in the work" and returned in `not_located` (`overlapping`
     maps a claim to the one it overlaps); a record key links to `#ref-<key>` when the work has
     that bibliography entry. Levels and the publication check work as in `summarize_ledger`, and
-    `out` is never overwritten. A `full` result holds whole quotes: keep it private."""
+    `out` is never overwritten and must be in the work's folder. A `full` result holds whole
+    quotes: keep it private."""
     return embed.embed_ledger(path, work, out, level, layout, include_withdrawn)
 
 

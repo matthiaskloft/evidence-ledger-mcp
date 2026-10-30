@@ -665,6 +665,9 @@ def embed_ledger(
         raise ValueError("out must differ from the ledger file")
     if target == Path(work).resolve():
         raise ValueError("out must differ from the work file")
+    # Relative links to figures, styles and scripts resolve against the work's folder.
+    if target.parent != Path(work).resolve().parent:
+        raise ValueError("out must be in the same folder as the work, so relative links still work")
     header, records = ledger.read(path)
     kept = [
         export.export_record(r, level) for r in records if include_withdrawn or "withdrawn" not in r

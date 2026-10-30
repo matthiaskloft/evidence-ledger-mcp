@@ -183,6 +183,11 @@ def test_refuses_overwrite_and_bad_arguments(path: str) -> None:
         embed.embed_ledger(path, str(work), str(work))
     with pytest.raises(ValueError, match="ledger"):
         embed.embed_ledger(path, str(work), path)
+    elsewhere = folder / "sub"
+    elsewhere.mkdir()
+    with pytest.raises(ValueError, match="same folder"):
+        embed.embed_ledger(path, str(work), str(elsewhere / "embedded.html"))
+    assert not (elsewhere / "embedded.html").exists()
     with pytest.raises(ValueError, match="level"):
         embed.embed_ledger(path, str(work), str(out), level="all")
     with pytest.raises(ValueError, match="layout"):

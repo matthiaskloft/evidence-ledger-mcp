@@ -55,3 +55,25 @@ jobs:
 
       - name: Verify built distributions and clean install
         run: uv run python tools/check_distribution.py
+
+  network:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: "0.11.28"
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+
+      - name: Set up Python
+        run: uv python install 3.11
+
+      - name: Install dependencies
+        run: uv sync --extra test --locked
+
+      - name: Run network tests
+        run: uv run pytest -q -m network

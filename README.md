@@ -2,7 +2,7 @@
 
 > **Under active development.** Both the schema and the server may change in breaking ways between versions until v1.0. Pin the version you use.
 
-An MCP server through which agents create, append to, search, validate and withdraw records in JSON Lines evidence ledgers, export them at full, masked or locator levels, and generate printable HTML summaries. Source and anchor checks are planned.
+An [MCP](https://modelcontextprotocol.io) server through which agents keep an evidence ledger for the citations in a work: for each claim, the source that backs it, where in the source, a short quote and why the citation is needed. Co-authors, scripts or a second model can then check every citation against its source.
 
 **Server: [v0.1.0 on PyPI](https://pypi.org/project/evidence-ledger-mcp/0.1.0/) · [server release](https://github.com/matthiaskloft/evidence-ledger-mcp/releases/tag/v0.1.0).**
 
@@ -12,24 +12,61 @@ The schema and server have independent versions, repositories and releases. This
 
 The MCP server and its associated documentation use the [MIT licence](LICENSE). The bundled schema uses [CC BY 4.0](schema/LICENSE), with attribution to Matthias Kloft. These licences do not cover ledger contents or third-party source material.
 
+## What it does
+
+- **Write ledgers safely.** Records are validated against the schema before they are appended. The server assigns record and claim IDs, computes quote hashes and dates the provenance instead of leaving them to the agent.
+- **Keep the history.** The server never deletes records; a withdrawn record keeps its reason.
+- **Find gaps.** Search by claim, source key or text, and list contestable claims still missing evidence.
+- **Share without leaking sources.** Exports and summaries come at three levels: `full` (private), `masked` (short excerpts) and `locator` (no quoted text). A publication check refuses to write a file that carries more source text than its level allows.
+- **Read it as a report.** A standalone HTML summary, grouped by claim, prints to PDF from a browser.
+
 ## Ledger format
 
-An evidence ledger records, for each citation, the claim, the source backing it, where in the source, a short quote and why the citation is needed. Ledgers follow the [evidence ledger schema](https://github.com/matthiaskloft/evidence-ledger-schema#readme), which documents the purpose, the file shapes, record fields, quote hashing, a minimal example and the sources the fields draw on. The server bundles a pinned copy in [`schema/`](schema/).
+Ledgers follow the [evidence ledger schema](https://github.com/matthiaskloft/evidence-ledger-schema#readme), which documents the purpose, the file shapes, record fields, quote hashing, a minimal example and the sources the fields draw on. The server bundles a pinned copy in [`schema/`](schema/).
 
 The server stores ledgers as JSON Lines (`.jsonl`, one record per line), because new records are appended as single lines, concurrent additions rarely conflict, and agents write JSON reliably. It reads JSON Lines and exports JSON or JSON Lines; YAML ledgers written by hand remain valid under the schema.
 
-## Running the MCP server
+## Installation
 
-Requires Python 3.11 or newer. From a source checkout with uv installed:
+Requires Python 3.11 or newer. The server speaks MCP over stdio. With [uv](https://docs.astral.sh/uv/), run the released version from PyPI:
 
 ```bash
-uv sync
-uv run evidence-ledger-mcp
+uvx --from evidence-ledger-mcp==0.1.0 evidence-ledger-mcp
 ```
 
-The server uses stdio. Configure an MCP client to run `uv` with arguments `run`, `--directory`, the absolute path to this checkout, and `evidence-ledger-mcp`. Pass absolute ledger paths to tools; relative paths resolve against the server's working directory.
+For example, to add it to Claude Code:
 
-Available tools are `schema_info`, `validate_record`, `create_ledger`, `add_record`, `get_record`, `find_records`, `validate_ledger`, `withdraw_record`, `export_ledger` and `summarize_ledger`. Create a ledger with a `work` containing `title` and `type`, then pass records and a separate `provenance` object to `add_record`. The server assigns record IDs, assigns claim IDs unless supplied, computes n2 quote hashes and fills in the provenance date.
+```bash
+claude mcp add evidence-ledger -- uvx --from evidence-ledger-mcp==0.1.0 evidence-ledger-mcp
+```
+
+Other MCP clients take the same command and arguments. To run a source checkout instead, use `uv sync`, then configure the client to run `uv` with arguments `run`, `--directory`, the absolute path to the checkout, and `evidence-ledger-mcp`.
+
+Pass absolute ledger paths to tools; relative paths resolve against the server's working directory.
+
+## Tools
+
+| Tool | What it does |
+| --- | --- |
+| `schema_info` | Reports the supported schema version. |
+| `create_ledger` | Creates a JSON Lines ledger with a header; `work` needs `title` and `type`. |
+| `add_record` | Validates and appends a record; takes the record and a separate `provenance` object and returns the stored record. |
+| `get_record` | Returns one record by its ID. |
+| `find_records` | Finds records by `claim_id`, source `key` or claim `text`, or contestable records with `missing_evidence`. Filters combine; withdrawn records are left out unless `include_withdrawn` is set. |
+| `validate_record` | Checks one record against the schema without writing it. |
+| `validate_ledger` | Checks a whole ledger and lists the problems found. |
+| `withdraw_record` | Marks a record withdrawn, with a reason, instead of deleting it. |
+| `export_ledger` | Writes the ledger as JSON or JSON Lines at a chosen level to a new file. |
+| `summarize_ledger` | Writes a standalone HTML summary grouped by claim to a new file. |
+
+### Typical workflow
+
+1. `create_ledger` once per work, next to the manuscript or code.
+2. `add_record` whenever a source is cited, with the claim, its anchor, the source key, locator, quote, relation and justification. The server fills in IDs, the quote hash and the provenance date.
+3. `find_records` with `missing_evidence` and `validate_ledger` before submission, to find claims still lacking evidence.
+4. `export_ledger` or `summarize_ledger` at `masked` or `locator` level to share the ledger with co-authors, reviewers or a journal.
+
+### Exports and summaries
 
 `export_ledger` defaults to `level="full"`, `format="jsonl"` and excluding withdrawn records. Keep full exports private. Use `level="masked"` with optional `max_words` (1–25) for excerpts, or `level="locator"` to remove quoted source text. Exports retain other record metadata, including `note` and header `notes`, and always remove `locator.chunk`. A publication check rejects copied source text in other metadata at masked and locator levels; it does not replace publication approval. The output must be a new file.
 

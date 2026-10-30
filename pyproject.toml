@@ -42,11 +42,12 @@ evidence-ledger-mcp = "evidence_ledger_mcp.server:main"
 Homepage = "https://github.com/matthiaskloft/evidence-ledger-mcp"
 Issues = "https://github.com/matthiaskloft/evidence-ledger-mcp/issues"
 Changelog = "https://github.com/matthiaskloft/evidence-ledger-mcp/blob/main/CHANGELOG.md"
+Schema = "https://github.com/matthiaskloft/evidence-ledger-schema"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/evidence_ledger_mcp"]
 
-# The schema has one source, schema/; the wheel carries a copy inside the package.
+# schema/ vendors an upstream release; the wheel carries the schema and its licence.
 [tool.hatch.build.targets.wheel.force-include]
 "schema/evidence-ledger.schema.json" = "evidence_ledger_mcp/evidence-ledger.schema.json"
 "schema/LICENSE" = "evidence_ledger_mcp/SCHEMA-LICENSE"

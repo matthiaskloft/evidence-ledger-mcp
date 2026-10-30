@@ -1,4 +1,4 @@
-# Releasing the MCP server and schema
+# Releasing the MCP server
 
 Server releases are tagged `vX.Y.Z`; schema releases use `schema-vX.Y.Z` and do not trigger this workflow.
 
@@ -12,14 +12,10 @@ Publishing needs the GitHub environments `pypi` and `testpypi`, and on PyPI and 
 
 If the GitHub release step fails after a draft was created, finish or delete that draft by hand; the workflow refuses to overwrite it.
 
-## Schema
+## Schema updates
 
-Schema tags do not publish a Python package or create a GitHub release automatically.
+The canonical schema is released independently in [evidence-ledger-schema](https://github.com/matthiaskloft/evidence-ledger-schema). Do not create new schema releases in this server repository. Original `schema-v*` tags and release pages remain historical records and never trigger server publishing.
 
-1. Confirm that the schema identifier and title, README, private ledger headers and development repository copy agree on the schema version. Update `schema/CHANGELOG.md` with the release notes. Validate the schema and run the required repository checks.
-2. Merge the release preparation through a pull request. After the user approves the schema release, tag the merged commit with `schema-vX.Y.Z` and push that tag.
-3. Create a GitHub release for the schema tag using its entry in `schema/CHANGELOG.md`. Attach only the public schema and its licence notice if standalone assets are wanted; never attach private ledgers or their exports.
+To adopt an upstream schema release, follow [schema/README.md](../schema/README.md), update its pinned revision and hashes, and run the server checks and distribution checks. The server wheel bundles the schema and its CC BY 4.0 licence notice. A server release should state which schema version it supports.
 
-## Coordinated first release
-
-The prepared pair is server `v0.1.0` and schema `schema-v0.4.0`. They may tag the same merged commit, while retaining independent versioning and release notes. Publish the schema release and rehearse the server on TestPyPI before publishing the server tag. The server wheel includes the schema and its separate CC BY 4.0 licence notice.
+The first server release was `v0.1.0`, supporting schema `schema-v0.4.0`. Future releases need not be synchronized.

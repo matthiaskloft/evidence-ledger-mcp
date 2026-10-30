@@ -2,14 +2,13 @@
 
 These instructions apply to every coding agent working in this repository (Claude Code, Codex and others). `CLAUDE.md` is a symlink to this file.
 
-## Two contributions
+## Schema ownership
 
-This repository holds two separate contributions (see README.md):
+This repository owns the MCP server. The canonical evidence ledger schema is maintained separately in `matthiaskloft/evidence-ledger-schema`.
 
-1. **The evidence ledger schema** in `schema/`, versioned and tagged `schema-vX.Y.Z`. Bump its version in the schema's `$id` and `title`, the README, our ledgers' headers and the development repository's copy (`agentic-scientific-workflows/spec/`) together.
-2. **The evidence ledger MCP server**, versioned on its own.
-
-Keep changes to one contribution in their own commits and pull requests where possible. A breaking schema change needs a new schema version.
+- `schema/` contains a pinned vendored release, not the schema's development source. Do not edit its schema, licence or changelog directly. Update all three from an upstream release and record its exact revision, version, tag and file hashes in `schema/UPSTREAM.json`.
+- Update supported-schema documentation and run all checks when adopting a new schema release. Keep one schema copy in this repository; the wheel receives its copy at build time.
+- Propose schema changes in the schema repository. Original `schema-v*` tags here are historical; future schema releases belong upstream.
 
 ## Pull requests
 

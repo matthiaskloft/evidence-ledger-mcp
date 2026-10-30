@@ -1,10 +1,12 @@
 # Contributing
 
-Thank you for your interest in the evidence ledger schema and MCP server.
+Thank you for your interest in the evidence ledger MCP server. Schema changes belong in [evidence-ledger-schema](https://github.com/matthiaskloft/evidence-ledger-schema); this repository vendors a pinned schema release.
 
 ## Issues
 
-Issues are welcome: questions, bug reports, suggestions for the schema, and pointers to related work we should know about. Please say which contribution an issue is about (the schema or the MCP server) and, for the schema, which version.
+Issues are welcome: questions, bug reports, feature requests and pointers to related work we should know about.
+
+If you want a change to the schema, please also open an issue in [evidence-ledger-schema](https://github.com/matthiaskloft/evidence-ledger-schema/issues), stating the schema version, and link the two issues. The schema is changed there first; the server adopts it in a later release.
 
 ## Pull requests
 

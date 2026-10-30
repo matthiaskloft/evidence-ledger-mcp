@@ -201,6 +201,12 @@ class Handler(BaseHTTPRequestHandler):
             self.send_header("Content-Type", "text/plain")
             self.end_headers()
             self.wfile.write(b"x" * 5000)
+        elif route == "/short":
+            self.send_response(200)
+            self.send_header("Content-Type", "text/plain")
+            self.send_header("Content-Length", "1000")
+            self.end_headers()
+            self.wfile.write(b"partial")
         elif route == "/notype":
             self.send_response(200)
             self.end_headers()
@@ -244,6 +250,7 @@ def test_open_failures_become_short_reasons(base: str) -> None:
         ("/missing", "HTTP 404"),
         ("/garbage", "network error"),
         ("/big", "too large"),
+        ("/short", "incomplete response"),
     ]:
         with pytest.raises(fetch.FetchError) as caught:
             fetch._open(base + route, LOCAL, 5, 1000)

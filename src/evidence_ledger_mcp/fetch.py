@@ -103,8 +103,10 @@ class _Https(http.client.HTTPSConnection):
 
     def connect(self) -> None:
         sock = self.pin.connect(self.port)
+        context = ssl.create_default_context()
+        context.minimum_version = ssl.TLSVersion.TLSv1_2
         # Certificate and SNI are checked against the hostname, not the pinned address.
-        self.sock = ssl.create_default_context().wrap_socket(sock, server_hostname=self.host)
+        self.sock = context.wrap_socket(sock, server_hostname=self.host)
 
 
 class _HttpHandler(urllib.request.HTTPHandler):
@@ -133,13 +135,16 @@ def _open(url: str, addresses: list[str], timeout: float, max_bytes: int) -> Res
     watchdog.daemon = True
     watchdog.start()
     try:
-        return _send(url, pin, timeout, max_bytes)
+        response = _send(url, pin, timeout, max_bytes)
     except FetchError as exc:
         if pin.expired:
             raise FetchError("timeout") from exc
         raise
     finally:
         watchdog.cancel()
+    if pin.expired:  # a socket closed at the deadline can read as a clean end of the body
+        raise FetchError("timeout")
+    return response
 
 
 def _send(url: str, pin: _Pin, timeout: float, max_bytes: int) -> Response:
@@ -182,6 +187,9 @@ def _response(reply: Any, max_bytes: int, deadline: float) -> Response:
             raise FetchError("too large")
         if time.monotonic() > deadline:
             raise FetchError("timeout")
+    length = headers.get("Content-Length")
+    if length and length.isdigit() and size < int(length):
+        raise FetchError("incomplete response")
     content_type = headers.get_content_type() if headers.get("Content-Type") else ""
     return Response(
         reply.status, content_type, headers.get_content_charset(), None, b"".join(chunks)

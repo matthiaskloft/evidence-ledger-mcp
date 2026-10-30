@@ -4,3 +4,10 @@ __pycache__/
 
 # Private evidence ledger (contains source quotes)
 ledger/
+
+# Build and tool output
+dist/
+release-notes.md
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/

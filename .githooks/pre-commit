@@ -1,4 +1,18 @@
 #!/bin/sh
-# Blocks commits that would publish private ledger content. Enable with:
+# Blocks commits that would publish private ledger content or a personal email address. Enable with:
 #   git config core.hooksPath .githooks
+set -e
+
+# Author and committer addresses are published with every commit; only noreply addresses are allowed.
+for role in GIT_AUTHOR_IDENT GIT_COMMITTER_IDENT; do
+    email=$(git var "$role" | sed -n 's/.*<\(.*\)>.*/\1/p')
+    case "$email" in
+        *@users.noreply.github.com) ;;
+        *)
+            echo "pre-commit: $role uses '$email', not a GitHub noreply address." >&2
+            echo "  git config user.email 'ID+USERNAME@users.noreply.github.com'" >&2
+            exit 1 ;;
+    esac
+done
+
 exec python tools/check_public.py --staged

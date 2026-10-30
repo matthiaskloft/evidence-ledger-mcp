@@ -11,6 +11,13 @@ This repository holds two separate contributions (see README.md):
 
 Keep changes to one contribution in their own commits and pull requests where possible. A breaking schema change needs a new schema version.
 
+## MCP server code
+
+- Python ≥ 3.11, managed with uv; source in `src/evidence_ledger_mcp/`, tests in `tests/`.
+- Before every commit: `uv run ruff check .`, `uv run ruff format --check .`, `uv run mypy` (strict) and `uv run pytest`. Do not silence a check with `# noqa` or `# type: ignore` without a comment saying why.
+- `schema/evidence-ledger.schema.json` is the only copy of the schema in the repository; the wheel gets its copy at build time. Never duplicate it under `src/`.
+- Server releases are tagged `vX.Y.Z` (see `docs/releasing.md`); never create or push a release tag without the user's approval.
+
 ## Ledgers for our own citations
 
 Every citation we add to this repository (README, docs, code comments, schema descriptions) gets a record in our own evidence ledger, following `schema/evidence-ledger.schema.json`.

@@ -26,6 +26,28 @@ def _read_text(path: str) -> str:
         raise ValueError(f"{path}: not UTF-8") from exc
 
 
+def _block_end(text: str, pos: int, opening: str) -> int:
+    """Position after the block opened by `opening`; braced and quoted values may hold any
+    parentheses, and a brace-delimited block counts braces only, as BibTeX does."""
+    braces = 1 if opening == "{" else 0
+    quoted = False
+    while pos < len(text):
+        char = text[pos]
+        pos += 1
+        if char == "{":
+            braces += 1
+        elif char == "}":
+            braces -= 1
+            if braces == 0 and opening == "{":
+                return pos
+        elif opening == "(" and braces == 0:
+            if char == '"':
+                quoted = not quoted
+            elif char == ")" and not quoted:
+                return pos
+    return pos
+
+
 def _bib_keys(text: str) -> set[str]:
     """Entry keys, skipping the whole body of @comment, @preamble and @string blocks."""
     keys: set[str] = set()
@@ -33,12 +55,7 @@ def _bib_keys(text: str) -> set[str]:
     while start := _BIB_START.search(text, pos):
         pos = start.end()
         if start.group(1).lower() in _BIB_NON_ENTRIES:
-            opening = start.group(2)
-            closing = "}" if opening == "{" else ")"
-            depth = 1
-            while depth and pos < len(text):
-                depth += (text[pos] == opening) - (text[pos] == closing)
-                pos += 1
+            pos = _block_end(text, pos, start.group(2))
         elif key := _BIB_KEY.match(text, pos):
             keys.add(key.group(1))
     return keys

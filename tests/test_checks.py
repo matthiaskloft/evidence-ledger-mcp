@@ -280,6 +280,16 @@ def test_bib_comment_blocks_hide_their_entries(path: str) -> None:
     assert checks.bibliography_keys(bib) == {"kept"}
 
 
+def test_bib_parenthesized_blocks_ignore_parentheses_in_values(path: str) -> None:
+    bib = write(
+        path,
+        "refs.bib",
+        '@preamble("\\providecommand{\\lparen}{(}")\n@string(x = {a)b})\n'
+        '@string(y = "c)d")\n@article{kept,\n}\n',
+    )
+    assert checks.bibliography_keys(bib) == {"kept"}
+
+
 def test_csl_ids_may_be_numbers(path: str) -> None:
     csl = write(path, "refs.json", json.dumps([{"id": 7}, {"id": "a"}, {"id": None}, "x"]))
     assert checks.bibliography_keys(csl) == {"7", "a"}

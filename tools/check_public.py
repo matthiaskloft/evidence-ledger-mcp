@@ -18,7 +18,8 @@ import unicodedata
 
 EMAIL = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
 ALLOWED_EMAIL = re.compile(r"(@users\.noreply\.github\.com|^noreply@anthropic\.com)$")
-QUOTE_FIELD = re.compile(r"""^\s*(-\s*)?["']?(quote|quote_prefix|quote_suffix)["']?\s*:""", re.M)
+QUOTE_KEYS = {"quote", "quote_prefix", "quote_suffix"}
+QUOTE_FIELD = re.compile(r"""(?<![\w-])["']?(quote|quote_prefix|quote_suffix)["']?\s*:""")
 MIN_QUOTE_CHARS = 20  # normalized length; shorter text would match by chance
 
 
@@ -42,6 +43,26 @@ def files(staged):
 def content(path, staged):
     raw = git("show", f":{path}") if staged else open(path, "rb").read()
     return raw.decode("utf-8", errors="ignore")
+
+
+def has_quote_keys(node):
+    if isinstance(node, dict):
+        return any(k in QUOTE_KEYS or has_quote_keys(v) for k, v in node.items())
+    if isinstance(node, list):
+        return any(has_quote_keys(v) for v in node)
+    return False
+
+
+def has_quote_fields(text):
+    # Parse so that compact JSON and flow-style YAML are caught; fall back to a
+    # pattern when the file does not parse.
+    import yaml
+
+    try:
+        docs = list(yaml.safe_load_all(text))
+    except yaml.YAMLError:
+        return bool(QUOTE_FIELD.search(text))
+    return any(has_quote_keys(d) for d in docs)
 
 
 def ledger_quotes():
@@ -68,7 +89,7 @@ def main():
             continue
         text = content(path, staged)
         is_data = path.endswith((".yaml", ".yml", ".json")) and not path.endswith(".schema.json")
-        if is_data and QUOTE_FIELD.search(text):
+        if is_data and has_quote_fields(text):
             problems.append(f"{path}: has quote fields; publish only masked or locator exports")
         for email in sorted(set(EMAIL.findall(text))):
             if not ALLOWED_EMAIL.search(email):

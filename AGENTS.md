@@ -11,6 +11,10 @@ This repository holds two separate contributions (see README.md):
 
 Keep changes to one contribution in their own commits and pull requests where possible. A breaking schema change needs a new schema version.
 
+## Pull requests
+
+- Resolve every review conversation on a pull request once it is addressed (fixed, or answered with why not); auto-merge waits until all conversations are resolved.
+
 ## MCP server code
 
 - Python ≥ 3.11, managed with uv; source in `src/evidence_ledger_mcp/`, tests in `tests/`.

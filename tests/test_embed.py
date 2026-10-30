@@ -370,3 +370,16 @@ def test_charset_is_utf8_and_added_text_is_ascii(path: str) -> None:
     _, html = run_new(path)
     assert html.count("charset") == 1
     assert html.startswith('<!DOCTYPE html><html><head><meta charset="utf-8">')
+
+
+def test_insertion_points_ignore_tags_inside_scripts_and_comments(path: str) -> None:
+    add(path)
+    script = '<script>const t = "<head></head><body></body><meta charset=latin1>";</script>'
+    work = (
+        f"<!DOCTYPE html><html><head>{script}<!-- </head> --></head>"
+        f"<body>{script}<p>Plain: cut unchecked citations.</p></body></html>"
+    )
+    _, html = run(path, work, layout="panel")
+    assert html.count(script) == 2
+    assert html.index("<style>") > html.index("<!-- </head> -->")
+    assert html.index('class="el-hint"') > html.index("<body>")

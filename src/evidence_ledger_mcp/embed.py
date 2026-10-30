@@ -267,6 +267,8 @@ _OPEN = r"(?:[^>\"']|\"[^\"]*\"|'[^']*')*>"
 _HTML_OPEN = re.compile(r"<html\b" + _OPEN, re.I)
 _HEAD_OPEN = re.compile(r"<head\b" + _OPEN, re.I)
 _BODY_OPEN = re.compile(r"<body\b" + _OPEN, re.I)
+_HEAD_CLOSE = re.compile(r"</head\s*>", re.I)
+_BODY_CLOSE = re.compile(r"</body\s*>", re.I)
 _META = re.compile(r"<meta\b" + _OPEN, re.I)
 _CHARSET = re.compile(r"(charset\s*=\s*[\"']?)\s*([^\s\"'>;/]+)", re.I)
 _DASHES = re.compile(r"-{2,3}")
@@ -523,21 +525,37 @@ def _card(
     return f'<section class="el-card" id="el-{cid}">{inner}</section>'
 
 
+def _tags(html: str, pattern: re.Pattern[str]) -> list[re.Match[str]]:
+    """Matches of `pattern` that are real tags, not text inside comments, scripts or styles."""
+    found = []
+    for token in _TOKEN.finditer(html):
+        if match := pattern.match(html, token.start(), token.end()):
+            found.append(match)
+    return found
+
+
+def _first(html: str, pattern: re.Pattern[str]) -> re.Match[str] | None:
+    return next(iter(_tags(html, pattern)), None)
+
+
 def _utf8(html: str) -> str:
     """Declare utf-8, the encoding of the output: fix a declared charset, or add one to a head."""
-    body = _BODY_OPEN.search(html)
+    body = _first(html, _BODY_OPEN)
     limit = body.start() if body else len(html)
     found = False
+    tags = {m.start() for m in _tags(html, _META)}
 
     def fix(match: re.Match[str]) -> str:
         nonlocal found
-        if match.start() >= limit or not _CHARSET.search(match.group()):
+        if match.start() >= limit or match.start() not in tags:
+            return match.group()
+        if not _CHARSET.search(match.group()):
             return match.group()
         found = True
         return _CHARSET.sub(lambda c: c.group(1) + "utf-8", match.group(), count=1)
 
     html = _META.sub(fix, html)
-    head = _HEAD_OPEN.search(html)
+    head = _first(html, _HEAD_OPEN)
     if not found and head:
         return html[: head.end()] + '<meta charset="utf-8">' + html[head.end() :]
     return html
@@ -545,10 +563,10 @@ def _utf8(html: str) -> str:
 
 def _inject(html: str, head_html: str) -> str:
     """Put `head_html` before </head>, creating a head if the work has none."""
-    head = re.search(r"</head\s*>", html, re.I)
+    head = _first(html, _HEAD_CLOSE)
     if head:
         return html[: head.start()] + head_html + html[head.start() :]
-    opening = _HTML_OPEN.search(html) or re.match(r"\s*<!doctype[^>]*>", html, re.I)
+    opening = _first(html, _HTML_OPEN) or re.match(r"\s*<!doctype[^>]*>", html, re.I)
     new = f'<head><meta charset="utf-8">{head_html}</head>'
     if opening:
         return html[: opening.end()] + new + html[opening.end() :]
@@ -557,10 +575,10 @@ def _inject(html: str, head_html: str) -> str:
 
 def _wrap_body(html: str, before: str, after: str) -> str:
     """Put `before` right after <body> and `after` before </body>, or around the whole text."""
-    opening = _BODY_OPEN.search(html)
+    opening = _first(html, _BODY_OPEN)
     at = opening.end() if opening else 0
     html = html[:at] + before + html[at:]
-    closing = list(re.finditer(r"</body\s*>", html, re.I))
+    closing = _tags(html, _BODY_CLOSE)
     if closing:
         at = closing[-1].start()
         return html[:at] + after + html[at:]

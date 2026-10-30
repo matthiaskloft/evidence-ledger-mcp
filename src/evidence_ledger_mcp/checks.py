@@ -8,7 +8,7 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
-from evidence_ledger_mcp import embed, ledger
+from evidence_ledger_mcp import embed, fetch, ledger
 
 HTML_SUFFIXES = (".html", ".htm")
 ENTRY_FIELDS = ("locator", "quote", "justification")
@@ -136,8 +136,11 @@ def check_ledger(
     bibliography: str | None = None,
     sources: Mapping[str, str] | None = None,
     include_withdrawn: bool = False,
+    source_urls: Mapping[str, str] | None = None,
 ) -> dict[str, Any]:
     """Check anchors, revisions, quotes and gaps; the result holds ids, keys and counts only."""
+    if conflict := sorted(set(sources or {}) & set(source_urls or {})):
+        raise ValueError(f"Keys in both sources and source_urls: {', '.join(conflict)}")
     _, all_records = ledger.read(path)
     labelled = [(str(r.get("id", f"record {n}")), r) for n, r in enumerate(all_records, 1)]
     rows = [(label, r) for label, r in labelled if include_withdrawn or "withdrawn" not in r]
@@ -183,6 +186,15 @@ def check_ledger(
             elif rev != revision:
                 different.append(label)
         result["revision"] = {"different": different, "unknown": unknown}
-    if sources is not None:
-        result["quotes"] = _quotes(rows, sources)
+    if sources is not None or source_urls is not None:
+        texts = dict(sources or {})
+        failed: dict[str, str] = {}
+        for key, url in (source_urls or {}).items():
+            try:
+                texts[key] = fetch.fetch_text(url)
+            except fetch.FetchError as exc:
+                failed[key] = str(exc)
+        result["quotes"] = _quotes(rows, texts)
+        if source_urls is not None:
+            result["quotes"]["fetch_failed"] = failed
     return result

@@ -73,3 +73,5 @@ ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+addopts = "-m 'not network'"
+markers = ["network: needs internet access; deselected by default"]

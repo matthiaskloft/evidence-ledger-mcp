@@ -143,6 +143,7 @@ def check_ledger(
     bibliography: str | None = None,
     sources: dict[str, str] | None = None,
     include_withdrawn: bool = False,
+    source_urls: dict[str, str] | None = None,
 ) -> Record:
     """Check a ledger without changing anything; the result holds record and claim ids, keys and
     counts, never quote or source text. `gaps` is always returned: contestable records lacking a
@@ -152,10 +153,16 @@ def check_ledger(
     `anchors` (HTML is matched on its visible text; other files on their source text, so markup
     inside an anchor reports not found: prefer the rendered HTML); `revision` lists records assessed
     against another or an unknown `provenance.manuscript_rev`; `sources` maps a record `key` to the
-    source's full text and re-checks each quote against it (`matched`, `not_found`, `no_source`).
+    source's full text and re-checks each quote against it (`matched`, `not_found`, `no_source`);
+    `source_urls` maps a record `key` to a public http(s) URL whose text (HTML or plain text, up to
+    10 MB) the server fetches itself and adds to `sources` (a key in both is an error). Hosts that
+    are not public, including via redirects, are refused; fetches that fail are listed with a short
+    reason under `quotes.fetch_failed`, and their records count as `no_source`.
     `bibliography` is a .bib or CSL JSON file; for an HTML `work` without one, its `ref-<key>`
     entries serve. Withdrawn records are skipped unless `include_withdrawn`."""
-    return checks.check_ledger(path, work, revision, bibliography, sources, include_withdrawn)
+    return checks.check_ledger(
+        path, work, revision, bibliography, sources, include_withdrawn, source_urls
+    )
 
 
 def main() -> None:

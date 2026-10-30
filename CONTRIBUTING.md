@@ -16,6 +16,9 @@ Enable the pre-commit hook once per clone:
 
 ```bash
 git config core.hooksPath .githooks
+python -m pip install pyyaml
 ```
+
+The hook runs `python`, so install PyYAML for that interpreter.
 
 It blocks commits that would publish private ledger content or personal email addresses. CI runs the same check on every pull request.

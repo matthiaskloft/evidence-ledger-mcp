@@ -17,6 +17,11 @@ import subprocess
 import sys
 import unicodedata
 
+try:
+    import yaml
+except ImportError:
+    sys.exit("check_public: PyYAML is missing; run: python -m pip install pyyaml")
+
 EMAIL = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
 ALLOWED_EMAIL = re.compile(r"(@users\.noreply\.github\.com|^noreply@anthropic\.com)$")
 QUOTE_KEYS = {"quote", "quote_prefix", "quote_suffix"}
@@ -57,8 +62,6 @@ def has_quote_keys(node):
 def has_quote_fields(text):
     # Parse so that compact JSON and flow-style YAML are caught; fall back to a
     # pattern when the file does not parse.
-    import yaml
-
     try:
         docs = list(yaml.safe_load_all(text))
     except yaml.YAMLError:
@@ -67,8 +70,6 @@ def has_quote_fields(text):
 
 
 def ledger_quotes():
-    import yaml
-
     quotes = []
     for path in sorted(glob.glob("ledger/*.yaml") + glob.glob("ledger/*.jsonl")):
         with open(path, encoding="utf-8") as f:

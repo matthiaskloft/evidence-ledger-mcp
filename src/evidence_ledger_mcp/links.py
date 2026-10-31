@@ -171,6 +171,15 @@ def _identifiers(
 def _match(
     key: str, records: list[ledger.Record], entry: dict[str, str], library: _Library
 ) -> Path | None:
+    """As `_find_pdf`, but no match at all once the time ran out: with PDFs left unread, a match
+    might not be the only one, or a better kind of match might be among them."""
+    found = _find_pdf(key, records, entry, library)
+    return None if library.not_read else found
+
+
+def _find_pdf(
+    key: str, records: list[ledger.Record], entry: dict[str, str], library: _Library
+) -> Path | None:
     """The PDF of a source, by the first of: its DOI on the PDF's first pages, its ISBN on the
     front matter, its title on the first pages, a file named after its key, or a file named
     after its first author and year. Each must match one PDF only; DOIs and titles are looked
@@ -338,7 +347,7 @@ def _resolve(
         files_left["time_limit"] = {
             "seconds": MAX_SECONDS,
             "files_not_read": len(library.not_read),
-            "note": "Some PDFs were not read, so their sources may show as source_not_found;"
+            "note": "Some PDFs were not read, so no source was matched from then on;"
             " a smaller folder finishes in time.",
         }
     return links, files_left

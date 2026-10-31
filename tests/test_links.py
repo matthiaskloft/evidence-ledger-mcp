@@ -465,3 +465,17 @@ def test_relink_copy_of_a_file_without_suffix_and_existing_copies(path: str, fol
     with pytest.raises(ValueError, match="not written by this tool"):
         links.relink_html(str(bare), str(folder))
     assert copy.read_text("utf-8") == "<p>my notes</p>"
+
+
+def test_no_match_from_a_scan_cut_short(
+    path: str, folder: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    add(path)
+    (folder / "a.pdf").write_bytes(ARTICLE)
+    (folder / "b.pdf").write_bytes(ARTICLE)  # same DOI: a full scan finds no single PDF
+    clock = iter([0.0, 0.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0])
+    monkeypatch.setattr("evidence_ledger_mcp.links.time.monotonic", lambda: next(clock, 1.0))
+    monkeypatch.setattr(links, "MAX_SECONDS", 0.5)
+    result = resolve(path, folder)  # reads a.pdf, then runs out of time before b.pdf
+    assert result["source_not_found"] == ["R-0001"]
+    assert result["time_limit"]["files_not_read"] == 1

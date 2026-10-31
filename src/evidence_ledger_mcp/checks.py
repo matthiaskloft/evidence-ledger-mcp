@@ -61,6 +61,7 @@ def _bib_value(body: str, pos: int) -> str:
                 return body[pos + 1 : end]
             depth += {"{": 1, "}": -1}.get(char, 0)
         return body[pos + 1 :]
+    # the pattern also matches the empty string, so re.match never returns None here
     return re.match(r"[^,}\s]*", body[pos:]).group(0)  # type: ignore[union-attr]
 
 

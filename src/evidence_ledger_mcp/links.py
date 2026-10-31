@@ -43,10 +43,10 @@ NOINDEX = '<meta name="robots" content="noindex">'
 # The "Your copy" line: buttons that stand out from the text, wrapping on narrow screens.
 COPY_STYLE = """<style>
 .el-copy { display: flex; flex-wrap: wrap; align-items: center; gap: .3rem .5rem;
-  margin: .5rem 0; font: 13px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  margin: .5rem 0; font: 0.85rem/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; }
 .el-copy a.el-btn { display: inline-block; padding: .05rem .5rem; border-radius: 4px;
   background: #e8eef7; color: #1d4f91; border: 1px solid #9db6d8; text-decoration: none;
-  font-weight: 600; font-size: 12px; }
+  font-weight: 600; font-size: inherit; }
 .el-copy a.el-btn:hover, .el-copy a.el-btn:focus-visible { background: #1d4f91; color: #fff;
   border-color: #1d4f91; }
 .el-copy .el-where { opacity: .8; overflow-wrap: anywhere; }
@@ -520,34 +520,37 @@ def _open_href(uri: str, page: int | None) -> str:
     return f"{uri}{'&' if '?' in uri else '?'}page={page}"
 
 
-def _button(css: str, href: str, label: str) -> str:
+def _button(css: str, href: str, label: str, title: str) -> str:
     """A link that opens in a new tab."""
     return (
-        f'<a class="{css}" target="_blank" rel="noopener noreferrer" href="{escape(href)}">'
-        f"{label}</a>"
+        f'<a class="{css}" target="_blank" rel="noopener noreferrer" href="{escape(href)}" '
+        f'title="{title}">{label}</a>'
     )
 
 
 def _copy_link(link: dict[str, Any], base: Path) -> str:
+    # A found passage needs no note; the file and page stay in the button's tooltip.
     if "file" not in link:
-        return ""
+        if link.get("status") not in ("source_not_found", "not_in_map"):
+            return ""
+        return (
+            '<p class="el-copy"><b>Your copy:</b> <span class="el-where">PDF not found</span></p>'
+        )
     file = Path(link["file"])
     page = link.get("page")
-    where = {
-        "passage": f"PDF page {page}, passage found",
-        "page_label": f"PDF page {page}, from the cited page",
-        "page_number": f"PDF page {page}, assuming the cited page number",
+    note = {
+        "page_label": "passage not found, opens the cited page",
+        "page_number": "passage not searched, opens the cited page number",
     }.get(link.get("page_from", ""), "")
+    title = escape(file.name) + (f", PDF page {page}" if page else "")
     href = _href(file, base, page)
-    buttons = _button("el-btn", href, "Open PDF")
+    buttons = _button("el-btn", href, "Open PDF", title)
     if link.get("open"):
         buttons += " " + _button(
-            "el-btn el-open", _open_href(link["open"], page), "Open in library"
+            "el-btn el-open", _open_href(link["open"], page), "Open in library", title
         )
-    note = escape(file.name) + (f", {escape(where)}" if where else "")
-    return (
-        f'<p class="el-copy"><b>Your copy:</b> {buttons} <span class="el-where">{note}</span></p>'
-    )
+    where = f' <span class="el-where">{note}</span>' if note else ""
+    return f'<p class="el-copy"><b>Your copy:</b> {buttons}{where}</p>'
 
 
 def relink_html(

@@ -207,7 +207,7 @@ def test_relink_writes_a_private_copy_with_relative_links(path: str, folder: Pat
     assert "<title>[Private] " in html and 'class="el-private"' in html
     assert '<meta name="robots" content="noindex">' in html
     assert 'href="pdfs/sub/article.pdf#page=2"' in html
-    assert "passage found" in html
+    assert 'title="article.pdf, PDF page 2"' in html and "passage not" not in html
     assert "Your copy" not in original.read_text("utf-8")
 
 
@@ -217,7 +217,9 @@ def test_relink_locator_export_uses_cited_page(path: str, folder: Path) -> None:
     result = links.relink_html(str(summary_html(path, folder, "locator")), str(folder))
     assert result["not_searchable"] == ["R-0001"]
     html = Path(result["path"]).read_text("utf-8")
-    assert "article.pdf#page=2" in html and "assuming the cited page number" in html
+    assert (
+        "article.pdf#page=2" in html and "passage not searched, opens the cited page number" in html
+    )
 
 
 def test_relink_absolute_link_outside_the_copy_folder(
@@ -266,7 +268,7 @@ def test_cited_page_maps_through_page_labels(path: str, folder: Path) -> None:
     add(path, locator={"page": 347})
     result = links.relink_html(str(summary_html(path, folder, "locator")), str(folder))
     html = Path(result["path"]).read_text("utf-8")
-    assert "article.pdf#page=2" in html and "from the cited page" in html
+    assert "article.pdf#page=2" in html and "passage not found, opens the cited page" in html
 
 
 def test_link_file_must_not_be_the_ledger(tmp_path: Path, folder: Path) -> None:
@@ -575,6 +577,7 @@ def test_relink_renders_open_in_library_with_page(path: str, folder: Path, tmp_p
     assert "a.el-btn" in html
     for label in ("Open PDF", "Open in library"):
         assert re.search(
-            rf'<a class="[^"]*" target="_blank" rel="noopener noreferrer" href="[^"]*">{label}</a>',
+            rf'<a class="[^"]*" target="_blank" rel="noopener noreferrer" '
+            rf'href="[^"]*" title="[^"]*">{label}</a>',
             html,
         )

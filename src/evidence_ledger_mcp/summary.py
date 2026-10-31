@@ -45,40 +45,41 @@ a { color: var(--accent); text-decoration: underline; text-underline-offset: 0.1
 h1 { font-size: 1.5rem; line-height: 1.3; margin: 0 0 0.75rem; }
 .id { font-weight: 600; font-size: 0.85rem; color: var(--muted); margin-right: 0.5rem; }
 .meta { display: flex; flex-wrap: wrap; gap: 0.35rem 1.5rem; margin: 0.6rem 0;
-  font-size: 0.82rem; color: var(--muted); }
+  font-size: 0.85rem; color: var(--muted); }
 .meta div { min-width: 6rem; }
-.meta dt { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; }
+.meta dt { font-size: 0.85rem; }
 .meta dd { margin: 0; overflow-wrap: anywhere; }
 section.claim { background: var(--card); border: 1px solid var(--line); border-radius: 10px;
   margin-top: 2.25rem; overflow: hidden; }
 .claim-part { padding: 1.4rem 1.6rem 0.8rem; }
 .evidence { border-top: 1px solid var(--line); padding: 0.4rem 1.6rem 1.2rem; }
 .claim-text { font-size: 1.2rem; font-weight: 600; line-height: 1.45; margin: 0 0 0.8rem; }
-.label { font-size: 0.72rem; font-weight: 600; text-transform: uppercase;
+.label { font-size: 0.85rem; font-weight: 600; text-transform: uppercase;
   letter-spacing: 0.06em; color: var(--muted); margin: 1.2rem 0 0.4rem; }
 article.record { padding: 1rem 0 0.4rem; }
 article.record + article.record { margin-top: 0.8rem; padding-top: 1.4rem;
   border-top: 1px solid var(--line); }
 .record-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.2rem 0.7rem; }
 .key { font-weight: 600; overflow-wrap: anywhere; }
-.relation { font-size: 0.8rem; color: var(--other); }
+.relation { font-size: 0.85rem; color: var(--other); }
 .rel-supports { color: var(--supports); }
 .rel-partially_supports { color: var(--partial); }
 .rel-contrasts { color: var(--contrasts); }
 blockquote, .anchor { margin: 0.8rem 0; padding: 0 0 0 1rem; border-left: 2px solid var(--line);
   color: var(--muted); font-family: Georgia, "Times New Roman", serif; font-size: 1rem;
   font-style: italic; line-height: 1.6; }
-mark { background: none; color: inherit; font-weight: 600;
+mark { background: none; color: inherit; font-style: inherit;
   text-decoration: underline 2px var(--accent); text-underline-offset: 0.2em; }
 .justification, .note { margin: 0.6rem 0; }
-.note { color: var(--muted); font-size: 0.9rem; }
+.note { color: var(--muted); font-size: 0.85rem; }
 .more { margin-top: 0.7rem; font-size: 0.85rem; color: var(--muted); }
-.more .meta { display: grid; grid-template-columns: max-content 1fr; gap: 0.2rem 1rem;
-  margin: 0; padding-top: 0.6rem; border-top: 1px dashed var(--line); }
-.more .meta div { display: contents; }
-.more .meta dt { font-size: 0.78rem; text-transform: none; letter-spacing: 0; }
-.more .meta dd { color: var(--text); opacity: 0.8; min-width: 0; line-break: anywhere; }
-.provenance { margin: 0.4rem 0 0; font-size: 0.8rem; color: var(--muted); }
+.claim-part .meta, .more .meta { display: grid; grid-template-columns: max-content 1fr;
+  gap: 0.2rem 1rem; margin: 0.6rem 0; }
+.more .meta { margin: 0; padding-top: 0.6rem; border-top: 1px dashed var(--line); }
+.claim-part .meta div, .more .meta div { display: contents; }
+.claim-part .meta dd, .more .meta dd { color: var(--text); opacity: 0.8; min-width: 0;
+  line-break: anywhere; }
+.provenance { margin: 0.4rem 0 0; font-size: 0.85rem; color: var(--muted); }
 .withdrawn { color: var(--contrasts); font-weight: 600; }
 @media (max-width: 40rem) {
   main { padding: 1.5rem 0.75rem 3rem; }
@@ -170,7 +171,16 @@ def _record(record: Record, key_href: str | None = None) -> str:
         if "withdrawn" in record
         else ""
     )
-    quote = f"<blockquote>{_e(record['quote'])}</blockquote>" if "quote" in record else ""
+    quote = ""
+    if isinstance(text := record.get("quote"), str):
+        # Underline the phrase that carries the claim, when it occurs once in the quote.
+        focus = record.get("quote_focus")
+        if isinstance(focus, str) and focus and text.count(focus) == 1:
+            before, after = text.split(focus)
+            body_html = f"{_e(before)}<mark>{_e(focus)}</mark>{_e(after)}"
+        else:
+            body_html = _e(text)
+        quote = f"<blockquote>{body_html}</blockquote>"
     body = (
         quote
         + _prose("justification", "Why", record.get("justification"))

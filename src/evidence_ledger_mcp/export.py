@@ -84,7 +84,13 @@ def export_level_problems(record: Record, level: str, max_words: object = None) 
     quote = record.get("quote")
     if isinstance(quote, str):
         shown = [word for word in quote.split() if word != "…"]
-        budget = max_words if type(max_words) is int else 6
+        # Without a valid max_words, mask_quote's default keeps at most 3 + 3 words.
+        budget = 6
+        if isinstance(max_words, int) and not isinstance(max_words, bool):
+            if 1 <= max_words <= MAX_EXCERPT_WORDS:
+                budget = max_words
+            else:
+                problems.append(f"max_words must be an integer from 1 to {MAX_EXCERPT_WORDS}")
         if len(shown) > budget:
             problems.append(f"masked quote exceeds its budget of {budget} words")
     return problems

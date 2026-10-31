@@ -6,7 +6,7 @@ Changes to the MCP server package `evidence-ledger-mcp`. Schema changes are rele
 
 ### Fixed
 
-- `validate_ledger` reads the header `level`: it accepts the masked and locator exports `export_ledger` writes (a masked quote no longer fails the hash comparison, a locator record needs no `quote`) and reports source text a hand-edited export reintroduces (`quote`, `quote_prefix`, `quote_suffix` or `quote_focus` in a locator export, a masked quote over its word budget or another source field in a masked one).
+- `validate_ledger` reads the header `level`: it accepts the masked and locator exports `export_ledger` writes (a masked quote no longer fails the hash comparison, a locator record needs no `quote`) and reports source text a hand-edited export reintroduces (`quote`, `quote_prefix`, `quote_suffix` or `quote_focus` in a locator export, a masked quote over its word budget or another source field in a masked one). Validation cannot catch source text copied into `claim` or `justification`; the publication check at export time remains the guard.
 
 ## [0.2.0] - 2026-10-31
 

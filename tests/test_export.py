@@ -374,3 +374,17 @@ def test_masked_export_with_longer_quote_and_context_is_invalid(path: str) -> No
 def test_locator_export_still_reports_genuine_problems(path: str) -> None:
     problems = edit_export(path, "locator", quote_hash="sha256-n2:nothex")
     assert any("quote_hash" in p for p in problems)
+
+
+def test_masked_export_with_inflated_max_words_is_invalid(path: str) -> None:
+    add(path)
+    export.export_ledger(path, out_of(path), "masked")
+    out = Path(out_of(path))
+    head, body = out.read_text("utf-8").splitlines()
+    header = json.loads(head)
+    header["ledger"]["max_words"] = 1000
+    record = {**json.loads(body), "quote": QUOTE}
+    out.write_text(json.dumps(header) + "\n" + json.dumps(record) + "\n", "utf-8")
+    problems = ledger.validate_ledger(str(out))
+    assert any("masked quote exceeds its budget" in p for p in problems)
+    assert any("max_words must be an integer from 1 to" in p for p in problems)

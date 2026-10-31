@@ -4,6 +4,11 @@ Changes to the MCP server package `evidence-ledger-mcp`. Schema changes are rele
 
 ## [Unreleased]
 
+### Added
+
+- Server instructions tell agents to stop and tell the user when a tool fails or misleads, to suggest, never file, a bug report reproduced with an invented record, and to keep workflow failures in the ledger. A bug report issue template collects the details.
+- `schema_info` also reports the server version.
+
 ## [0.2.0] - 2026-10-31
 
 ### Fixed

@@ -312,3 +312,9 @@ def test_markup_inside_a_non_html_anchor_is_not_found(path: str) -> None:
     add(path, anchor={"exact": "cut unchecked citations"})
     markdown = write(path, "work.md", "We did cut *unchecked* citations.")
     assert checks.check_ledger(path, work=markdown)["anchors"]["not_found"] == ["R-0001"]
+
+
+def test_quoted_bib_value_keeps_braced_quotes(tmp_path: Path) -> None:
+    bib = tmp_path / "refs.bib"
+    bib.write_text('@article{k, title = "An {\\"o}verview of ledgers", year = 2026}\n', "utf-8")
+    assert checks.bibliography(str(bib))["k"]["title"] == 'An {\\"o}verview of ledgers'

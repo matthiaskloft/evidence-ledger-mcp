@@ -54,8 +54,13 @@ def _bib_value(body: str, pos: int) -> str:
     if body.startswith("{", pos):
         return body[pos + 1 : _block_end(body, pos + 1, "{") - 1]
     if body.startswith('"', pos):
-        close = body.find('"', pos + 1)
-        return body[pos + 1 : close if close >= 0 else len(body)]
+        depth = 0  # a quote inside braces, as in {\"o}, does not close the value
+        for end in range(pos + 1, len(body)):
+            char = body[end]
+            if char == '"' and depth == 0:
+                return body[pos + 1 : end]
+            depth += {"{": 1, "}": -1}.get(char, 0)
+        return body[pos + 1 :]
     return re.match(r"[^,}\s]*", body[pos:]).group(0)  # type: ignore[union-attr]
 
 

@@ -14,6 +14,7 @@ HTML_SUFFIXES = (".html", ".htm")
 ENTRY_FIELDS = ("locator", "quote", "justification")
 _BIB_START = re.compile(r"@\s*(\w+)\s*([{(])")
 _BIB_KEY = re.compile(r"\s*([^,\s]+)\s*,")
+_BIB_FIELD = re.compile(r"([A-Za-z][\w-]*)\s*=\s*")
 _BIB_NON_ENTRIES = {"string", "comment", "preamble"}
 
 Row = tuple[str, ledger.Record]
@@ -48,21 +49,40 @@ def _block_end(text: str, pos: int, opening: str) -> int:
     return pos
 
 
-def _bib_keys(text: str) -> set[str]:
-    """Entry keys; each block's body is skipped whole, so an `@` inside a value or inside
-    @comment, @preamble and @string blocks starts no entry."""
-    keys: set[str] = set()
+def _bib_value(body: str, pos: int) -> str:
+    """The value starting at `pos`: braced, quoted or a bare word (e.g. a @string name)."""
+    if body.startswith("{", pos):
+        return body[pos + 1 : _block_end(body, pos + 1, "{") - 1]
+    if body.startswith('"', pos):
+        close = body.find('"', pos + 1)
+        return body[pos + 1 : close if close >= 0 else len(body)]
+    return re.match(r"[^,}\s]*", body[pos:]).group(0)  # type: ignore[union-attr]
+
+
+def _bib_entries(text: str) -> dict[str, dict[str, str]]:
+    """Entries by key, with their fields by lowercase name; each block's body is skipped whole,
+    so an `@` inside a value or inside @comment, @preamble and @string blocks starts no entry."""
+    entries: dict[str, dict[str, str]] = {}
     pos = 0
     while start := _BIB_START.search(text, pos):
         pos = start.end()
+        end = _block_end(text, pos, start.group(2))
         if start.group(1).lower() not in _BIB_NON_ENTRIES and (key := _BIB_KEY.match(text, pos)):
-            keys.add(key.group(1))
-        pos = _block_end(text, pos, start.group(2))
-    return keys
+            body = text[key.end() : end]
+            fields: dict[str, str] = {}
+            at = 0
+            while field := _BIB_FIELD.search(body, at):
+                value = _bib_value(body, field.end())
+                fields.setdefault(field.group(1).lower(), value)
+                at = field.end() + len(value) + 1
+            entries[key.group(1)] = fields
+        pos = end
+    return entries
 
 
-def bibliography_keys(path: str) -> set[str]:
-    """Entry keys of a BibTeX (.bib) or CSL JSON (.json) file."""
+def bibliography(path: str) -> dict[str, dict[str, str]]:
+    """Entries of a BibTeX (.bib) or CSL JSON (.json) file by key, with their string fields
+    (BibTeX field names lowercased; CSL JSON names as they are, e.g. `DOI`, `title`)."""
     suffix = Path(path).suffix.lower()
     if suffix not in (".bib", ".json"):
         raise ValueError(
@@ -70,7 +90,7 @@ def bibliography_keys(path: str) -> set[str]:
         )
     text = _read_text(path)
     if suffix == ".bib":
-        return _bib_keys(text)
+        return _bib_entries(text)
     try:
         items = json.loads(text)
     except json.JSONDecodeError as exc:
@@ -78,10 +98,15 @@ def bibliography_keys(path: str) -> set[str]:
     if not isinstance(items, list):
         raise ValueError(f"{path}: CSL JSON must be a list of items")
     return {
-        str(item["id"])
+        str(item["id"]): {k: v for k, v in item.items() if isinstance(v, str)}
         for item in items
         if isinstance(item, dict) and isinstance(item.get("id"), str | int)
     }
+
+
+def bibliography_keys(path: str) -> set[str]:
+    """Entry keys of a BibTeX (.bib) or CSL JSON (.json) file."""
+    return set(bibliography(path))
 
 
 def _anchors(text: str, is_html: bool, rows: list[Row]) -> dict[str, Any]:

@@ -11,11 +11,14 @@ from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
-from evidence_ledger_mcp import fetch, ledger
+from evidence_ledger_mcp import checks, fetch, ledger
 
 MAX_FILES = 5000
 MAX_FILE_BYTES = 200 * 1024 * 1024
 MAX_SPAN = 20000  # normalized characters between a quote's first and last words
+MIN_TITLE = 20  # normalized characters; shorter titles could match by chance
+FRONT_PAGES = 2
+ISBN_PAGES = 10
 STATUSES = ("found", "passage_not_found", "source_not_found", "not_searchable")
 
 
@@ -29,6 +32,7 @@ class _Library:
             raise ValueError(f"{folder}: more than {MAX_FILES} PDFs")
         self.pages: dict[Path, list[str]] = {}
         self.unreadable: dict[str, str] = {}
+        self.front: dict[Path, tuple[str, str, str]] = {}
 
     def read(self, file: Path) -> list[str] | None:
         if file not in self.pages and str(file) not in self.unreadable:
@@ -42,32 +46,62 @@ class _Library:
                 self.unreadable[str(file)] = "not readable"
         return self.pages.get(file)
 
-    def texts(self) -> Iterator[tuple[Path, list[str]]]:
+    def fronts(self) -> Iterator[tuple[Path, tuple[str, str, str]]]:
+        """Each readable PDF with its front matter prepared for DOI, ISBN and title matching."""
         for file in self.files:
-            if (pages := self.read(file)) is not None:
-                yield file, pages
+            if file not in self.front and (pages := self.read(file)) is not None:
+                self.front[file] = (
+                    "\n".join(pages[:FRONT_PAGES]).casefold(),
+                    re.sub(r"[^0-9Xx]", "", "".join(pages[:ISBN_PAGES])).upper(),
+                    ledger.normalize("".join(pages[:FRONT_PAGES])),
+                )
+            if file in self.front:
+                yield file, self.front[file]
 
 
-def _identifiers(records: list[ledger.Record]) -> tuple[set[str], set[str]]:
-    dois = {r["doi"].casefold() for r in records if isinstance(r.get("doi"), str)}
-    isbns = {
-        re.sub(r"[ -]", "", r["isbn"]).upper() for r in records if isinstance(r.get("isbn"), str)
-    }
-    return dois, isbns
+def _title(value: str) -> str:
+    """A title normalized for matching, without LaTeX commands; empty if too short to be safe."""
+    title = ledger.normalize(re.sub(r"\\[A-Za-z]+", "", value))
+    return title if len(title) >= MIN_TITLE else ""
 
 
-def _match(key: str, records: list[ledger.Record], library: _Library) -> Path | None:
-    """The PDF named after the key, or else the first whose text holds the DOI or ISBN."""
+def _identifiers(
+    records: list[ledger.Record], entry: dict[str, str]
+) -> tuple[set[str], set[str], str]:
+    """DOIs, ISBNs and the normalized title of a source, from its records and its bibliography
+    entry; the entry's BibTeX (`doi`) or CSL JSON (`DOI`) names are both read."""
+    dois = {r["doi"] for r in records if isinstance(r.get("doi"), str)}
+    isbns = {r["isbn"] for r in records if isinstance(r.get("isbn"), str)}
+    for name, found in (("doi", dois), ("isbn", isbns)):
+        if value := entry.get(name) or entry.get(name.upper()):
+            found.add(value)
+    doi_set = {d.strip().removeprefix("https://doi.org/").casefold() for d in dois}
+    isbn_set = {re.sub(r"[^0-9Xx]", "", i).upper() for i in isbns} - {""}
+    return doi_set, isbn_set, _title(entry.get("title", ""))
+
+
+def _match(
+    key: str, records: list[ledger.Record], entry: dict[str, str], library: _Library
+) -> Path | None:
+    """The PDF of a source, by the first of: its DOI on the PDF's first pages, its ISBN on the
+    front matter, its title on the first pages, or a file named after its key. A DOI or title
+    must match one PDF only; DOIs and titles are looked for on the first pages, so that a PDF
+    merely citing the source in its references does not match."""
+    dois, isbns, title = _identifiers(records, entry)
+    for kind, needles in enumerate((dois, isbns, {title} - {""})):
+        hits = (
+            [
+                file
+                for file, front in library.fronts()
+                if any(needle in front[kind] for needle in needles)
+            ]
+            if needles
+            else []
+        )
+        if len(hits) == 1:
+            return hits[0]
     for file in library.files:
         if file.stem.casefold() == key.casefold() and library.read(file) is not None:
-            return file
-    dois, isbns = _identifiers(records)
-    if not dois and not isbns:
-        return None
-    for file, pages in library.texts():
-        text = "\n".join(pages)
-        compact = re.sub(r"[\s-]", "", text).upper()
-        if any(doi in text.casefold() for doi in dois) or any(i in compact for i in isbns):
             return file
     return None
 
@@ -109,7 +143,11 @@ def _find(record: ledger.Record, pages: list[str]) -> int | None | bool:
 
 
 def resolve_links(
-    path: str, folder: str, link_file: str, include_withdrawn: bool = False
+    path: str,
+    folder: str,
+    link_file: str,
+    bibliography: str | None = None,
+    include_withdrawn: bool = False,
 ) -> dict[str, Any]:
     """Match each record's source to a PDF in `folder`, find its passage by `quote_hash`, and
     write the result to `link_file`; returns record ids by status, never source text."""
@@ -132,8 +170,11 @@ def resolve_links(
         if isinstance(record.get("key"), str):
             by_key.setdefault(record["key"], []).append(record)
 
+    entries = checks.bibliography(bibliography) if bibliography else {}
     library = _Library(root)
-    files = {key: _match(key, records, library) for key, records in by_key.items()}
+    files = {
+        key: _match(key, records, entries.get(key, {}), library) for key, records in by_key.items()
+    }
     links: dict[str, dict[str, Any]] = {}
     for label, record in rows:
         key = record.get("key")

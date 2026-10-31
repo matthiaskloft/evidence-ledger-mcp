@@ -20,13 +20,13 @@ Masked exports accept `max_words` from 1 to 25. With a focus they keep a centred
 
 ## Link resolution
 
-`resolve_links(path, folder, link_file, include_withdrawn)` resolves the ledger's sources against the reader's own PDFs, so that a recipient can confirm records without the author's files. `folder` is searched recursively for `.pdf` files (at most 5000; files over 200 MB are skipped). A source matches the PDF whose file name is its `key` (case-insensitive, e.g. `smith2020.pdf`); otherwise the first PDF whose text contains the source's DOI or ISBN. Text is extracted as in `check_ledger`, in a separate process stopped after 15 seconds per file.
+`resolve_links(path, folder, link_file, bibliography, include_withdrawn)` resolves the ledger's sources against the reader's own PDFs, so that a recipient can confirm records without the author's files. `folder` is searched recursively for `.pdf` files (at most 5000; files over 200 MB are skipped). File names do not matter: a source is matched by the first of its DOI on a PDF's first two pages, its ISBN on the first ten, and its title on the first two (letters and digits only, so case, punctuation and line breaks do not matter; titles under 20 characters are skipped). Each must point to exactly one PDF, and only the first pages are read, so that a PDF which merely cites the source in its references does not match. DOI and ISBN come from the records and, with `bibliography` (a `.bib` or CSL JSON file), from the source's entry, which also supplies the title. Only when none of these match is a PDF named after the `key` (case-insensitive, e.g. `smith2020.pdf`) used. Text is extracted as in `check_ledger`, in a separate process stopped after 15 seconds per file.
 
 Each record then gets one status:
 
 - `found`: a passage in the PDF hashes to the record's `quote_hash` (n2, or legacy n1). This confirms the record independently. Whitespace, punctuation and case may differ; a word hyphenated across PDF lines can still prevent a match.
 - `passage_not_found`: the source matched, but no passage did.
-- `source_not_found`: no PDF matched the record's key, DOI or ISBN.
+- `source_not_found`: no single PDF matched the source's DOI, ISBN, title or key.
 - `not_searchable`: the record has no quote to start from. A whole quote works, and so does a quote masked to its first and last words, as `masked` exports keep it; a `locator` export carries only the hash, which cannot be searched yet.
 
 The result is written to `link_file` (a `.json` file, overwritten on each run): the ledger and folder paths, and for each record its status, the matched file and, when found, the 1-based page where the passage starts. The link file holds paths on the reader's computer; keep it there and do not share it. The tool returns the record IDs per status, the link file path and `unreadable_files` (each PDF that could not be read, with a short reason such as `unreadable pdf`, `encrypted pdf` or `pdf too slow`); it never returns source text. Withdrawn records are skipped unless `include_withdrawn` is set.

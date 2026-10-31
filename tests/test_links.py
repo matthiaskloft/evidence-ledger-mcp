@@ -146,3 +146,40 @@ def test_bad_arguments(path: str, folder: Path) -> None:
         links.resolve_links(path, str(folder / "missing"), str(folder / "l.json"))
     with pytest.raises(ValueError, match=r".json"):
         links.resolve_links(path, str(folder), str(folder / "links.txt"))
+
+
+def test_file_names_do_not_matter_with_doi_or_title(path: str, folder: Path) -> None:
+    add(path, doi=None, url="https://example.org/study")
+    (folder / "Smith et al. - 2026 - final version.pdf").write_bytes(
+        make_pdf(["Ledgers Reduce Unchecked Citations in Manuscripts"], [QUOTE])
+    )
+    bib = folder.parent / "refs.bib"
+    bib.write_text(
+        "@article{exampleStudy2026,\n  title = {Ledgers {Reduce} \\emph{Unchecked} Citations"
+        " in Manuscripts},\n  year = 2026\n}\n",
+        "utf-8",
+    )
+    assert resolve(path, folder)["source_not_found"] == ["R-0001"]
+    assert resolve(path, folder, bibliography=str(bib))["found"] == ["R-0001"]
+
+
+def test_doi_from_csl_json(path: str, folder: Path) -> None:
+    add(path, doi=None, url="https://example.org/study")
+    (folder / "x.pdf").write_bytes(ARTICLE)
+    csl = folder.parent / "refs.json"
+    csl.write_text(json.dumps([{"id": "exampleStudy2026", "DOI": "10.1000/example"}]), "utf-8")
+    assert resolve(path, folder, bibliography=str(csl))["found"] == ["R-0001"]
+
+
+def test_doi_in_references_of_another_pdf_does_not_match(path: str, folder: Path) -> None:
+    add(path)
+    citing = make_pdf(["Another paper"], ["Body"], ["References", "doi: 10.1000/example"])
+    (folder / "citing.pdf").write_bytes(citing)
+    assert resolve(path, folder)["source_not_found"] == ["R-0001"]
+
+
+def test_ambiguous_doi_does_not_match(path: str, folder: Path) -> None:
+    add(path)
+    (folder / "a.pdf").write_bytes(ARTICLE)
+    (folder / "b.pdf").write_bytes(ARTICLE)
+    assert resolve(path, folder)["source_not_found"] == ["R-0001"]

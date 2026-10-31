@@ -113,7 +113,10 @@ sup.el-ref { font: 600 0.68em/0 system-ui, -apple-system, "Segoe UI", sans-serif
 # Panel layout only: the text keeps clear of a fixed side panel (a bottom sheet when narrow).
 PANEL_STYLE = """
 mark.el-claim { scroll-margin-top: 4rem; }
-html.el-js mark.el-claim { cursor: pointer; }
+html.el-panel mark.el-claim { cursor: pointer; }
+html:not(.el-panel) #el-card, html:not(.el-panel) .el-howto { display: none; }
+.el-toggle { font: inherit; color: var(--el-accent); background: none; cursor: pointer;
+  border: 1px solid var(--el-line); border-radius: 4px; padding: 0 0.5rem; margin-left: 0.5rem; }
 #el-card { position: fixed; left: 0; right: 0; bottom: 0; max-height: 70vh; z-index: 2000;
   overflow-y: auto; background: var(--el-panel); color: var(--el-fg);
   border-top: 1px solid var(--el-line); border-radius: 12px 12px 0 0;
@@ -130,11 +133,12 @@ html.el-js mark.el-claim { cursor: pointer; }
 html.el-open body { padding-bottom: 70vh; }
 @media screen {
   /* With the panel working, located claims are read there; the end cards remain for print. */
-  html.el-js .el-evidence > .el-card:has(.el-back), html.el-js .el-evidence:not(:has(h3)) {
+  html.el-panel .el-evidence > .el-card:has(.el-back),
+  html.el-panel .el-evidence > .el-toc, html.el-panel .el-evidence:not(:has(h3)) {
     display: none; }
 }
 @media (min-width: 1100px) {
-  html.el-js { padding-right: min(400px, 32vw); }
+  html.el-panel { padding-right: min(400px, 32vw); }
   html.el-open body { padding-bottom: 0; }
   .el-esc { display: none; }
   #el-card { left: auto; top: 0; bottom: 0; right: 0; width: min(400px, 32vw); max-height: none;
@@ -155,6 +159,9 @@ SCRIPT = """
   var root = document.documentElement;
   var current = null;
   var wide = matchMedia("(min-width: 1100px)");
+  var toggle = document.querySelector(".el-toggle");
+  var mode = panel.dataset.layout;
+  try { mode = localStorage.getItem("el-layout") || mode; } catch (e) { /* storage blocked */ }
   function first(mark) {
     return marks.filter(function (m) { return m.dataset.claim === mark.dataset.claim; })[0];
   }
@@ -207,11 +214,28 @@ SCRIPT = """
     root.classList.remove("el-open");
     mark.focus({ preventScroll: true });
   }
+  function setMode(m, remember) {
+    mode = m === "panel" ? "panel" : "endnotes";
+    root.classList.toggle("el-panel", mode === "panel");
+    if (toggle) toggle.textContent = mode === "panel" ? "Show as endnotes" : "Show in side panel";
+    if (remember) {
+      try { localStorage.setItem("el-layout", mode); } catch (e) { /* storage blocked */ }
+    }
+    if (mode === "panel") return widen();
+    current = null;
+    unmark();
+    panel.hidden = true;
+    root.classList.remove("el-open");
+  }
   function step(d) {
     var i = firsts.indexOf(current);
     show(firsts[(i + d + firsts.length) % firsts.length], true);
   }
   document.addEventListener("click", function (e) {
+    if (e.target.closest(".el-toggle")) {
+      return setMode(mode === "panel" ? "endnotes" : "panel", true);
+    }
+    if (mode !== "panel") return;
     var ref = e.target.closest("sup.el-ref a");
     var mark = e.target.closest("mark.el-claim")
       || (ref && firsts.filter(function (m) {
@@ -228,6 +252,7 @@ SCRIPT = """
     if (current && !e.target.closest("#el-card")) close();
   });
   document.addEventListener("keydown", function (e) {
+    if (mode !== "panel") return;
     var target = e.target;
     var mark = target.closest && target.closest("mark.el-claim");
     if (mark && target === mark && (e.key === "Enter" || e.key === " ")) {
@@ -245,16 +270,19 @@ SCRIPT = """
     }
   });
   function widen() {
-    if (wide.matches && firsts.length) show(current || firsts[0], false, false);
+    if (mode === "panel" && wide.matches && firsts.length) {
+      show(current || firsts[0], false, false);
+    }
   }
   if (wide.addEventListener) wide.addEventListener("change", widen);
   else if (wide.addListener) wide.addListener(widen);
-  widen();
+  setMode(mode, false);
 })();
 """
 
 PANEL = (
-    '<aside id="el-card" hidden tabindex="-1" role="dialog" aria-label="Evidence">'
+    '<aside id="el-card" hidden data-layout="{layout}" tabindex="-1" role="dialog" '
+    'aria-label="Evidence">'
     '<header><span class="el-panel-title"></span><span>'
     '<button type="button" data-el="-1" aria-label="Previous passage">&larr;</button> '
     '<button type="button" data-el="1" aria-label="Next passage">&rarr;</button> '
@@ -262,8 +290,10 @@ PANEL = (
     '</span></header><div class="el-panel-body"></div></aside>'
 )
 HINT = (
-    '<p class="el-hint" hidden>Click or press Enter on a highlighted passage to see its evidence; '
-    '&larr; &rarr; step through the passages.<span class="el-esc"> Esc closes the panel.</span></p>'
+    '<p class="el-hint" hidden><span class="el-howto">Click or press Enter on a highlighted '
+    "passage to see its evidence; &larr; &rarr; step through the passages."
+    '<span class="el-esc"> Esc closes the panel.</span></span>'
+    '<button type="button" class="el-toggle"></button></p>'
 )
 
 _CLASS_NAMES = {"evidence": "el-ev", "note": "el-text-note"}
@@ -683,10 +713,11 @@ def embed(
         f'<section class="el-evidence" id="el-evidence"><h2>Evidence</h2>'
         f"{summary.toc(groups, 'el-', 'el-')}{''.join(parts)}</section>"
     )
-    panel = layout == "panel" and bool(located)
+    # Both views are always written; `layout` picks the one a reader sees first.
+    panel = bool(located)
     style = f"<style>{STYLE}{PANEL_STYLE if panel else ''}</style>"
     if panel:
-        section += f"{PANEL}<script>{SCRIPT}</script>"
+        section += f"{PANEL.replace('{layout}', layout)}<script>{SCRIPT}</script>"
     section += summary.data_script(records, level)
     body = _wrap_body(body, HINT if panel else "", section)
     return _inject(_utf8(body), style), located, missing, overlapping

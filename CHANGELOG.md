@@ -8,11 +8,13 @@ Changes to the MCP server package `evidence-ledger-mcp`. Schema changes are rele
 
 - `resolve_links` and `relink_html` take `link_map`, the path of a `.private.json` file that maps citation keys to PDFs (and optionally to a link that opens the item in the reader's library), as an alternative or addition to `folder` (#57). The map is validated against `link-map.schema.json`, shipped in the package. Keys missing from the map are reported `not_in_map` unless `folder` is also given. Cards in a relinked copy get an "Open in library" button, with the page appended.
 - A folder file named `<citation key>.pdf` is now tried before DOI, ISBN and title matching (#57).
+- Summaries and embedded endnotes open with a list of the claims, each linked to its card with a dot per record coloured by relation (#57).
+- An embedded work can be switched between endnotes and the side panel with a button in its hint line; the reader's choice is remembered and `layout` only sets the view shown first (#57).
 - Tool descriptions, server instructions and `docs/tools.md` recommend a `sources/` folder of only the cited PDFs, kept out of version control, warn against pointing `folder` at a whole library, and describe building the map with Zotero and Better BibTeX (#57).
 
 ### Changed
 
-- The summary HTML is calmer: a 70-character reading width, a quieter quote, fewer borders and the record metadata in one small muted block; both themes keep their colours. The "Your copy" line of a relinked copy shows "Open PDF" as a visible button that opens in a new tab, with the file name and page note beside it, wrapping on narrow screens and following the dark theme (#57).
+- Summary and embedded evidence cards share one calmer style: a 70-character reading width, two text sizes below the headings, the passage in the work styled like the quote with only its focal text underlined (also `quote_focus` in quotes), and the record details, including who added it, in one label/value list. The "Your copy" line of a relinked copy has small matching "Open PDF" and "Open in library" buttons that open in a new tab, with the file and page in their tooltip and a note only when the passage or PDF was not found (#57).
 
 ## [0.3.1] - 2026-10-31
 

@@ -121,7 +121,7 @@ def test_endnotes_layout(path: str) -> None:
     assert '<section class="el-evidence" id="el-evidence"><h2>Evidence</h2>' in html
     assert html.index('id="el-evidence"') < html.index("</body>")
     assert 'href="#el-back-C-0001">&#8617; back to text' in html
-    assert "<aside" not in html
+    assert '<aside id="el-card" hidden data-layout="endnotes"' in html  # the panel is a switch away
     assert "<style>p { color: red }</style><style>" in html
     assert QUOTE in html
 
@@ -138,7 +138,7 @@ def test_panel_layout(path: str) -> None:
     assert html.index('id="el-evidence"') < html.index('id="el-card"') < html.index("</body>")
     assert 'href="#el-back-C-0001">&#8617; back to text' in html
     assert '<p class="el-hint" hidden>' in html and html.count("<script>") == 1
-    assert "html.el-js { padding-right: min(400px, 32vw); }" in html and "@media print" in html
+    assert "html.el-panel { padding-right: min(400px, 32vw); }" in html and "@media print" in html
     assert "el-el-" not in html
 
 
@@ -153,8 +153,19 @@ def test_theme_is_owned_by_the_output(path: str) -> None:
         assert "background: var(--el-panel)" in html and "#1e2229" not in html
 
 
-def test_endnotes_has_no_script_or_panel(path: str) -> None:
+def test_both_views_and_a_switch(path: str) -> None:
     add(path)
+    _, html = run(path)
+    assert 'data-layout="endnotes"' in html and '<button type="button" class="el-toggle">' in html
+    assert 'class="el-howto"' in html and "html:not(.el-panel) #el-card" in html
+    script = html.split("<script>")[1]
+    assert 'localStorage.getItem("el-layout")' in script and "setMode(mode, false)" in script
+    _, panel = run_new(path, layout="panel")
+    assert 'data-layout="panel"' in panel
+
+
+def test_no_located_claims_no_script_or_panel(path: str) -> None:
+    add(path, anchor={"exact": "nowhere in the work"})
     _, html = run(path)
     assert "<script>" not in html and "<aside" not in html and "role=" not in html
 
@@ -208,7 +219,7 @@ def test_head_is_created_and_claims_are_escaped(path: str) -> None:
     add(path, claim="<script>alert(1)</script>")
     _, html = run(path, "<p>Plain: cut unchecked citations.</p>")
     assert html.startswith("<head><meta charset")
-    assert "<script>" not in html
+    assert "<script>alert" not in html
     assert "&lt;script&gt;" in html
 
 
@@ -234,7 +245,7 @@ def test_panel_without_javascript_stays_plain(path: str) -> None:
     _, html = run(path, layout="panel")
     assert "role=" not in html.split("<aside")[0]
     assert "\nhtml { padding-right" not in html and "\nmark.el-claim { cursor" not in html
-    assert "html.el-js mark.el-claim { cursor: pointer; }" in html
+    assert "html.el-panel mark.el-claim { cursor: pointer; }" in html
     script = html.split("<script>")[1]
     for attribute in ("tabindex", "role", "aria-controls", "aria-expanded"):
         assert f'setAttribute("{attribute}"' in script

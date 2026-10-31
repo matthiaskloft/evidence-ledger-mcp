@@ -101,3 +101,9 @@ def test_server_instructions_point_to_bug_report_without_self_filing() -> None:
         "not a server bug",
     ):
         assert phrase in text
+
+
+def test_server_instructions_state_the_working_directory_note_once() -> None:
+    from evidence_ledger_mcp.server import mcp
+
+    assert (mcp.instructions or "").count("server's working directory") == 1

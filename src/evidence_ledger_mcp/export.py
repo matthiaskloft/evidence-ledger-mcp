@@ -75,6 +75,21 @@ def export_record(record: Record, level: str, max_words: int | None = None) -> R
     return out
 
 
+def export_level_problems(record: Record, level: str, max_words: object = None) -> list[str]:
+    """Source text a record of an export at this level must not carry, for validation."""
+    present = [field for field in SOURCE_FIELDS if field in record]
+    if level == "locator":
+        return [f"locator export contains {field}" for field in present]
+    problems = [f"masked export contains {field}" for field in present if field != "quote"]
+    quote = record.get("quote")
+    if isinstance(quote, str):
+        shown = [word for word in quote.split() if word != "…"]
+        budget = max_words if type(max_words) is int else 6
+        if len(shown) > budget:
+            problems.append(f"masked quote exceeds its budget of {budget} words")
+    return problems
+
+
 def _strings(value: object) -> Iterator[str]:
     if isinstance(value, str):
         yield value

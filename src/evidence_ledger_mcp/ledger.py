@@ -183,6 +183,9 @@ def validate_ledger(path: str) -> list[str]:
             f"header: schema_version {header.get('schema_version')} "
             f"differs from the server's {schema_version()}"
         )
+    from evidence_ledger_mcp.export import export_level_problems  # export imports this module
+
+    level = header.get("level")
     seen_ids: set[str] = set()
     importance: dict[str, set[str | None]] = {}
     for number, line in enumerate(lines[1:], start=2):
@@ -197,13 +200,25 @@ def validate_ledger(path: str) -> list[str]:
             problems.append(f"line {number}: not a record")
             continue
         label = str(record.get("id", f"line {number}"))
-        problems += [f"{label}: {e}" for e in record_errors(record)]
+        # A locator export drops `quote`, which the record schema requires for contestable
+        # records; a placeholder lets the rest of the schema apply, and the level's own
+        # checks report any source text left in the record.
+        checked = (
+            {**record, "quote": "…"} if level == "locator" and "quote" not in record else record
+        )
+        problems += [f"{label}: {e}" for e in record_errors(checked)]
+        if level in ("masked", "locator"):
+            problems += [
+                f"{label}: {e}"
+                for e in export_level_problems(record, level, header.get("max_words"))
+            ]
         if label in seen_ids:
             problems.append(f"{label}: duplicate id (line {number})")
         seen_ids.add(label)
         quote = record.get("quote")
         if (
-            isinstance(quote, str)
+            level != "masked"  # a masked quote cannot reproduce the hash of the full quote
+            and isinstance(quote, str)
             and "quote_hash" in record
             and (
                 not isinstance(record["quote_hash"], str)

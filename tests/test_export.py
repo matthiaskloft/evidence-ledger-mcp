@@ -337,3 +337,40 @@ def test_full_export_remains_a_valid_ledger(path: str) -> None:
     add(path)
     export.export_ledger(path, out_of(path))
     assert ledger.validate_ledger(out_of(path)) == []
+
+
+@pytest.mark.parametrize(
+    ("level", "max_words"), [("masked", None), ("masked", 5), ("locator", None)]
+)
+def test_masked_and_locator_exports_remain_valid_ledgers(
+    path: str, level: str, max_words: int | None
+) -> None:
+    add(path, quote_focus="reduced unchecked citations")
+    export.export_ledger(path, out_of(path), level, max_words=max_words)
+    assert ledger.validate_ledger(out_of(path)) == []
+
+
+def edit_export(path: str, level: str, **changes: Any) -> list[str]:
+    add(path)
+    export.export_ledger(path, out_of(path), level)
+    out = Path(out_of(path))
+    head, body = out.read_text("utf-8").splitlines()
+    record = {**json.loads(body), **changes}
+    out.write_text(head + "\n" + json.dumps(record) + "\n", "utf-8")
+    return ledger.validate_ledger(str(out))
+
+
+def test_locator_export_with_source_text_is_invalid(path: str) -> None:
+    problems = edit_export(path, "locator", quote=QUOTE)
+    assert "R-0001: locator export contains quote" in problems
+
+
+def test_masked_export_with_longer_quote_and_context_is_invalid(path: str) -> None:
+    problems = edit_export(path, "masked", quote=QUOTE, quote_prefix=PREFIX)
+    assert any("masked quote exceeds its budget" in p for p in problems)
+    assert "R-0001: masked export contains quote_prefix" in problems
+
+
+def test_locator_export_still_reports_genuine_problems(path: str) -> None:
+    problems = edit_export(path, "locator", quote_hash="sha256-n2:nothex")
+    assert any("quote_hash" in p for p in problems)

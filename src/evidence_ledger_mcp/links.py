@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import quote
 
-from evidence_ledger_mcp import checks, fetch, ledger
+from evidence_ledger_mcp import checks, embed, fetch, ledger
 
 MAX_FILES = 5000
 MAX_FILE_BYTES = 200 * 1024 * 1024
@@ -406,12 +406,14 @@ def relink_html(html: str, folder: str, bibliography: str | None = None) -> dict
         return match.group(1) + _copy_link(link, base)
 
     text = _RECORD_HEAD.sub(add_link, text)
-    text = _TITLE.sub(lambda m: m.group(0) + "[Private] ", text, count=1)
-    if body := _BODY.search(text):
+    # real tags only: a tag-like string inside a script or comment is left alone
+    if title := embed._first(text, _TITLE):
+        text = text[: title.end()] + "[Private] " + text[title.end() :]
+    if body := embed._first(text, _BODY):
         text = text[: body.end()] + BANNER + text[body.end() :]
     else:
         text = BANNER + text
-    if head := _HEAD.search(text):
+    if head := embed._first(text, _HEAD):
         text = text[: head.end()] + NOINDEX + text[head.end() :]
     with open(target, "w", encoding="utf-8", newline="\n") as handle:
         handle.write(text)

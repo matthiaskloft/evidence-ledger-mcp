@@ -349,3 +349,15 @@ def test_very_long_whole_quote_is_found() -> None:
 def test_quote_not_matching_its_hash_is_not_found() -> None:
     record = {"quote": QUOTE, "quote_hash": ledger.quote_hash(QUOTE + " altered")}
     assert links._find(record, [QUOTE]) is None
+
+
+def test_relink_marks_real_tags_not_tag_like_script_text(path: str, folder: Path) -> None:
+    add(path)
+    (folder / "article.pdf").write_bytes(ARTICLE)
+    original = summary_html(path, folder)
+    script = '<script>const t = "<title><head><body>";</script>'
+    text = original.read_text("utf-8")
+    original.write_text(text.replace("<html", script + "<html", 1), "utf-8")
+    html = Path(links.relink_html(str(original), str(folder))["path"]).read_text("utf-8")
+    assert script in html
+    assert "<title>[Private] " in html and 'class="el-private"' in html

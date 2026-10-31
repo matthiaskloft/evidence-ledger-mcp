@@ -33,7 +33,8 @@ HYPHENATED = (
     " research [4,8,17], should have extremely low PPV."
 )
 # Page 1 ends mid-sentence; the sidebar (title, citation, licence, affiliations) and page 2's
-# running head come between the two halves in the extracted text.
+# running head come between the two halves in the extracted text. The minus sign is the PDF's
+# own U+2212, kept so the quote matches the source as extracted.
 ACROSS_SIDEBAR = "A research finding is thus more likely true than false if (1 − β)R > α."  # noqa: RUF001
 # Leaves out the sentence between the two without marking it: a misquote.
 OMISSION = (

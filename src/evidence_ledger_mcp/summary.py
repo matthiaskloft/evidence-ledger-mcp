@@ -65,15 +65,19 @@ article.record + article.record { margin-top: 0.8rem; padding-top: 1.4rem;
 .rel-supports { color: var(--supports); }
 .rel-partially_supports { color: var(--partial); }
 .rel-contrasts { color: var(--contrasts); }
-blockquote { margin: 0.8rem 0; padding: 0 0 0 1rem; border-left: 2px solid var(--line);
+blockquote, .anchor { margin: 0.8rem 0; padding: 0 0 0 1rem; border-left: 2px solid var(--line);
   color: var(--muted); font-family: Georgia, "Times New Roman", serif; font-size: 1rem;
   font-style: italic; line-height: 1.6; }
-.anchor { margin: 0 0 0.6rem; color: var(--muted); }
 mark { background: none; color: inherit; font-weight: 600;
   text-decoration: underline 2px var(--accent); text-underline-offset: 0.2em; }
 .justification, .note { margin: 0.6rem 0; }
 .note { color: var(--muted); font-size: 0.9rem; }
 .more { margin-top: 0.7rem; font-size: 0.85rem; color: var(--muted); }
+.more .meta { display: grid; grid-template-columns: max-content 1fr; gap: 0.2rem 1rem;
+  margin: 0; padding-top: 0.6rem; border-top: 1px dashed var(--line); }
+.more .meta div { display: contents; }
+.more .meta dt { font-size: 0.78rem; text-transform: none; letter-spacing: 0; }
+.more .meta dd { color: var(--text); opacity: 0.8; min-width: 0; line-break: anywhere; }
 .provenance { margin: 0.4rem 0 0; font-size: 0.8rem; color: var(--muted); }
 .withdrawn { color: var(--contrasts); font-weight: 600; }
 @media (max-width: 40rem) {

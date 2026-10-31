@@ -42,24 +42,22 @@ BANNER = (
 NOINDEX = '<meta name="robots" content="noindex">'
 # The "Your copy" line: buttons that stand out from the text, wrapping on narrow screens.
 COPY_STYLE = """<style>
-.el-copy { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem .6rem;
-  margin: .6rem 0; font: 14px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; }
-.el-copy a.el-btn { display: inline-block; padding: .35rem .8rem; border-radius: 6px;
-  background: #1d4f91; color: #fff; text-decoration: underline; font-weight: 600;
-  border: 1px solid #1d4f91; }
-.el-copy a.el-btn.el-open { background: transparent; color: #1d4f91; }
-.el-copy a.el-btn:hover, .el-copy a.el-btn:focus-visible { background: #0f3a70; color: #fff; }
+.el-copy { display: flex; flex-wrap: wrap; align-items: center; gap: .3rem .5rem;
+  margin: .5rem 0; font: 13px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; }
+.el-copy a.el-btn { display: inline-block; padding: .05rem .5rem; border-radius: 4px;
+  background: #e8eef7; color: #1d4f91; border: 1px solid #9db6d8; text-decoration: none;
+  font-weight: 600; font-size: 12px; }
+.el-copy a.el-btn:hover, .el-copy a.el-btn:focus-visible { background: #1d4f91; color: #fff;
+  border-color: #1d4f91; }
 .el-copy .el-where { opacity: .8; overflow-wrap: anywhere; }
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) .el-copy a.el-btn { background: #8ab4e0; color: #10151c;
-    border-color: #8ab4e0; }
-  :root:not([data-theme="light"]) .el-copy a.el-btn.el-open { background: transparent;
-    color: #8ab4e0; }
-  :root:not([data-theme="light"]) .el-copy a.el-btn:hover { background: #b5d0ee; color: #10151c; }
+  :root:not([data-theme="light"]) .el-copy a.el-btn { background: #1f2c3d; color: #a9c7ee;
+    border-color: #3d5a80; }
+  :root:not([data-theme="light"]) .el-copy a.el-btn:hover { background: #8ab4e0; color: #10151c; }
 }
-:root[data-theme="dark"] .el-copy a.el-btn { background: #8ab4e0; color: #10151c;
-  border-color: #8ab4e0; }
-:root[data-theme="dark"] .el-copy a.el-btn.el-open { background: transparent; color: #8ab4e0; }
+:root[data-theme="dark"] .el-copy a.el-btn { background: #1f2c3d; color: #a9c7ee;
+  border-color: #3d5a80; }
+:root[data-theme="dark"] .el-copy a.el-btn:hover { background: #8ab4e0; color: #10151c; }
 </style>"""
 _DATA = re.compile(
     r'<script type="application/json" id="evidence-ledger-data">(.*?)</script>', re.DOTALL

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "evidence-ledger-mcp"
-version = "0.3.0"
+version = "0.3.1"
 description = "MCP server through which agents write and check evidence ledgers for the citations in a work."
 readme = "README.md"
 license = { file = "LICENSE" }

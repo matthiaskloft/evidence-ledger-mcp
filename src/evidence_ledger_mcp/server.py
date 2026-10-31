@@ -215,10 +215,10 @@ def resolve_links(
     passage needs its quote, whole or masked to its first and last words as in `masked` exports;
     a `locator` export holds only the hash. The passage must hash to `quote_hash`, so
     whitespace, punctuation, case and line-end hyphens may differ; a whole quote split by a
-    page break (with running heads or captions between its parts) is found and marked
-    `across_pages` in the link file. PDFs that cannot be read are listed with a short reason under
-    `unreadable_files`, and `time_limit` when reading PDFs stopped after 300 seconds. The
-    result holds record ids and file paths, never source text."""
+    page break (with or without running heads or captions between its parts) is found and
+    marked `across_pages` in the link file. PDFs that cannot be read are listed with a short
+    reason under `unreadable_files`, and `time_limit` when reading PDFs stopped after 300 seconds.
+    The result holds record ids and file paths, never source text."""
     return links.resolve_links(path, folder, link_file, bibliography, include_withdrawn)
 
 

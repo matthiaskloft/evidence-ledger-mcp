@@ -77,9 +77,16 @@ async def exports(tmp: Path) -> None:
         again = {"path": path, "out": str(tmp / "full.jsonl"), "level": "full"}
         assert (await session.call_tool("export_ledger", again)).isError
 
-        # A note quoting the source would leak it: the masked export is refused, nothing written.
+        # add_record refuses a note quoting the source; a hand-edited ledger can still hold one,
+        # and the masked export is then refused, nothing written.
         leaky = {**RECORD, "note": f"Says: {QUOTE.upper()}!"}
-        await call(session, "add_record", path=path, record=leaky, provenance=PROVENANCE)
+        rejected = await session.call_tool(
+            "add_record", {"path": path, "record": leaky, "provenance": PROVENANCE}
+        )
+        assert rejected.isError
+        assert "note repeats source text" in str(rejected.content)
+        with open(path, "a", encoding="utf-8", newline="\n") as handle:
+            handle.write(json.dumps({**leaky, "id": "R-0003", "claim_id": "C-0003"}) + "\n")
         refused = tmp / "refused.jsonl"
         failed = await session.call_tool(
             "export_ledger", {"path": path, "out": str(refused), "level": "masked"}

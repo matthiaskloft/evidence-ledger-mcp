@@ -37,6 +37,14 @@ def add(path: str, **changes: Any) -> dict[str, Any]:
     return ledger.add_record(path, {**RECORD, **changes}, PROVENANCE)
 
 
+def add_with_note(path: str, note: str) -> None:
+    """Add a record, then put a note on it by hand: add_record refuses such notes."""
+    add(path)
+    lines = Path(path).read_text("utf-8").splitlines()
+    lines[-1] = json.dumps({**json.loads(lines[-1]), "note": note})
+    Path(path).write_text("\n".join(lines) + "\n", "utf-8")
+
+
 def write(path: str, **kwargs: Any) -> str:
     out = str(Path(path).parent / "summary.html")
     summary.summarize_ledger(path, out, **kwargs)
@@ -87,7 +95,7 @@ def test_locator_has_no_quote(path: str) -> None:
 
 
 def test_leaky_note_writes_nothing(path: str) -> None:
-    add(path, note=f"Says: {QUOTE.upper()}!")
+    add_with_note(path, f"Says: {QUOTE.upper()}!")
     out = Path(path).parent / "summary.html"
     with pytest.raises(ValueError, match="R-0001"):
         summary.summarize_ledger(path, str(out), level="masked")

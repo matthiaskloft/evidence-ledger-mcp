@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any
 
@@ -42,6 +43,14 @@ def path(tmp_path: Path) -> str:
 
 def add(path: str, **changes: Any) -> dict[str, Any]:
     return ledger.add_record(path, {**RECORD, **changes}, PROVENANCE)
+
+
+def add_with_note(path: str, note: str) -> None:
+    """Add a record, then put a note on it by hand: add_record refuses such notes."""
+    add(path)
+    lines = Path(path).read_text("utf-8").splitlines()
+    lines[-1] = json.dumps({**json.loads(lines[-1]), "note": note})
+    Path(path).write_text("\n".join(lines) + "\n", "utf-8")
 
 
 def run(path: str, html: str = HTML, **kwargs: Any) -> tuple[dict[str, Any], str]:
@@ -160,7 +169,7 @@ def test_masked_and_locator_hide_quotes(path: str) -> None:
 
 
 def test_leak_refuses_and_writes_nothing(path: str) -> None:
-    add(path, note=f"Says: {QUOTE.upper()}!")
+    add_with_note(path, f"Says: {QUOTE.upper()}!")
     out = Path(path).parent / "embedded.html"
     work = Path(path).parent / "work.html"
     work.write_text(HTML, "utf-8")

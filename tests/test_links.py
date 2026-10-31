@@ -415,3 +415,67 @@ def test_author_year_needs_one_exact_match(path: str, folder: Path, names: list[
     bib = folder.parent / "refs.bib"
     bib.write_text(SMITH_BIB, "utf-8")
     assert resolve(path, folder, bibliography=str(bib))["source_not_found"] == ["R-0001"]
+
+
+@pytest.mark.parametrize(
+    "doi", ["doi:10.1000/EXAMPLE", "http://dx.doi.org/10.1000/example", " 10.1000/example "]
+)
+def test_doi_prefixes_in_the_bibliography_are_stripped(path: str, folder: Path, doi: str) -> None:
+    add(path, doi=None, url="https://example.org/study")
+    (folder / "anything.pdf").write_bytes(ARTICLE)
+    bib = folder.parent / "refs.bib"
+    bib.write_text(f"@article{{exampleStudy2026, doi = {{{doi}}}}}", "utf-8")
+    assert resolve(path, folder, bibliography=str(bib))["found"] == ["R-0001"]
+
+
+def test_time_limit_leaves_later_pdfs_unread(
+    path: str, folder: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    add(path)
+    (folder / "article.pdf").write_bytes(ARTICLE)
+    monkeypatch.setattr(links, "MAX_SECONDS", -1)
+    result = resolve(path, folder)
+    assert result["source_not_found"] == ["R-0001"]
+    assert result["time_limit"]["files_not_read"] == 1
+
+
+def test_link_file_not_written_by_the_tool_is_left_alone(path: str, folder: Path) -> None:
+    add(path)
+    (folder / "article.pdf").write_bytes(ARTICLE)
+    other = folder.parent / "links.private.json"
+    other.write_text('{"mine": true}', "utf-8")
+    with pytest.raises(ValueError, match="not written by this tool"):
+        resolve(path, folder)
+    assert other.read_text("utf-8") == '{"mine": true}'
+    other.unlink()
+    resolve(path, folder)
+    assert resolve(path, folder)["found"] == ["R-0001"]  # its own file is replaced
+
+
+def test_relink_copy_of_a_file_without_suffix_and_existing_copies(path: str, folder: Path) -> None:
+    add(path)
+    (folder / "article.pdf").write_bytes(ARTICLE)
+    original = summary_html(path, folder)
+    bare = original.with_name("summary")
+    bare.write_bytes(original.read_bytes())
+    copy = Path(links.relink_html(str(bare), str(folder))["path"])
+    assert copy.name == "summary.private.html"
+    links.relink_html(str(bare), str(folder))  # its own copy is replaced
+    copy.write_text("<p>my notes</p>", "utf-8")
+    with pytest.raises(ValueError, match="not written by this tool"):
+        links.relink_html(str(bare), str(folder))
+    assert copy.read_text("utf-8") == "<p>my notes</p>"
+
+
+def test_no_match_from_a_scan_cut_short(
+    path: str, folder: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    add(path)
+    (folder / "a.pdf").write_bytes(ARTICLE)
+    (folder / "b.pdf").write_bytes(ARTICLE)  # same DOI: a full scan finds no single PDF
+    clock = iter([0.0, 0.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0])
+    monkeypatch.setattr("evidence_ledger_mcp.links.time.monotonic", lambda: next(clock, 1.0))
+    monkeypatch.setattr(links, "MAX_SECONDS", 0.5)
+    result = resolve(path, folder)  # reads a.pdf, then runs out of time before b.pdf
+    assert result["source_not_found"] == ["R-0001"]
+    assert result["time_limit"]["files_not_read"] == 1

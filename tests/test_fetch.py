@@ -286,7 +286,17 @@ def test_odd_content_type_is_not_echoed() -> None:
 
 
 @pytest.mark.parametrize(
-    "address", ["0.0.0.0", "::ffff:127.0.0.1", "64:ff9b::a00:1", "64:ff9b::7f00:1"]
+    "address",
+    [
+        "0.0.0.0",
+        "::ffff:127.0.0.1",
+        "64:ff9b::a00:1",
+        "64:ff9b::7f00:1",
+        "64:ff9b:1::a00:1",  # local-use NAT64
+        "2002:7f00:1::1",  # 6to4 around 127.0.0.1
+        "2002:a00:1::",  # 6to4 around 10.0.0.1
+        "::127.0.0.1",  # IPv4-compatible
+    ],
 )
 def test_more_non_public_addresses(
     path: str, monkeypatch: pytest.MonkeyPatch, address: str

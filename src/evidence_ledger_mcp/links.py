@@ -113,12 +113,18 @@ def _year(entry: dict[str, str]) -> str:
 
 
 def _author_year(stem: str, family: str, year: str) -> bool:
-    """Whether a file name holds the family name and the year, as in `Ioannidis 2005`,
-    `ioannidis_2005_why-most` or `2005-Ioannidis`; the name may span words (`van der Berg`)."""
-    if not family or not year or not re.search(rf"(?<!\d){year}(?!\d)", stem):
+    """Whether a file name holds the family name and the year as words of their own, as in
+    `Ioannidis 2005`, `ioannidis_2005_why-most`, `Ioannidis2005` or `2005-Ioannidis`. The name
+    is one or more whole words (`van der Berg`), so `Li` does not match `Linear`; the year may
+    carry a letter, as in `2005a`, but no further digits."""
+    if not family or not year or not re.search(rf"(?<!\d){year}(?![^\W_]{{2}}|\d)", stem):
         return False
     words = [ledger.normalize(w) for w in re.findall(r"[^\W\d_]+", stem)]
-    return any("".join(words[i:]).startswith(family) for i in range(len(words)))
+    return any(
+        "".join(words[i:j]) == family
+        for i in range(len(words))
+        for j in range(i + 1, len(words) + 1)
+    )
 
 
 def _doi_text(text: str) -> str:

@@ -367,7 +367,14 @@ SMITH_BIB = "@article{exampleStudy2026,\n  author = {Smith, Ann},\n  year = 2026
 
 
 @pytest.mark.parametrize(
-    "name", ["Smith 2026.pdf", "smith_2026_ledgers.pdf", "2026-Smith.pdf", "Smith et al 2026.pdf"]
+    "name",
+    [
+        "Smith 2026.pdf",
+        "smith_2026_ledgers.pdf",
+        "2026-Smith.pdf",
+        "Smith et al 2026.pdf",
+        "Smith2026a.pdf",
+    ],
 )
 def test_pdf_named_after_author_and_year(path: str, folder: Path, name: str) -> None:
     add(path, doi=None, url="https://example.org/study")
@@ -391,7 +398,16 @@ def test_author_year_from_csl_json(path: str, folder: Path) -> None:
     assert resolve(path, folder, bibliography=str(csl))["found"] == ["R-0001"]
 
 
-@pytest.mark.parametrize("names", [["Smith 2026a.pdf", "Smith 2026b.pdf"], ["Smith 20260.pdf"]])
+@pytest.mark.parametrize(
+    "names",
+    [
+        ["Smith 2026a.pdf", "Smith 2026b.pdf"],  # two papers of one author and year
+        ["Smith 20260.pdf"],
+        ["Smithson 2026.pdf"],  # the name must be a whole word
+        ["Blacksmith 2026.pdf"],
+        ["Smith 2026final.pdf"],
+    ],
+)
 def test_author_year_needs_one_exact_match(path: str, folder: Path, names: list[str]) -> None:
     add(path, doi=None, url="https://example.org/study")
     for name in names:

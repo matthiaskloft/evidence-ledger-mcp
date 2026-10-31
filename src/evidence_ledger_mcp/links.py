@@ -143,7 +143,8 @@ def _find(record: ledger.Record, pages: list[str]) -> int | None | bool:
         return False
     norm = version.removeprefix("sha256-")
     whole = ledger.normalize(quote, norm)
-    if hashlib.sha256(whole.encode("utf-8")).hexdigest() == digest:
+    is_whole = hashlib.sha256(whole.encode("utf-8")).hexdigest() == digest
+    if is_whole:
         pieces = [whole]  # the quote as recorded; an ellipsis in it is part of the source
     else:
         pieces = [ledger.normalize(s, norm) for s in quote.strip().split("…")]
@@ -154,7 +155,7 @@ def _find(record: ledger.Record, pages: list[str]) -> int | None | bool:
     starts = [0]
     for page in normalized:
         starts.append(starts[-1] + len(page))
-    if len(pieces) == 1 and pieces[0] == whole and (pos := text.find(whole)) >= 0:
+    if is_whole and (pos := text.find(whole)) >= 0:
         return bisect.bisect_right(starts, pos)  # a whole quote needs no span limit
     ends = [pos + len(pieces[-1]) for pos in _occurrences(text, pieces[-1])]
     budget = MAX_CANDIDATES

@@ -236,3 +236,8 @@ def test_very_long_whole_quote_is_found() -> None:
     quote = " ".join(f"word{n}" for n in range(5000))
     record = {"quote": quote, "quote_hash": ledger.quote_hash(quote)}
     assert links._find(record, ["Intro.", quote]) == 2
+
+
+def test_quote_not_matching_its_hash_is_not_found() -> None:
+    record = {"quote": QUOTE, "quote_hash": ledger.quote_hash(QUOTE + " altered")}
+    assert links._find(record, [QUOTE]) is None

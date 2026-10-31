@@ -154,10 +154,11 @@ def check_ledger(
     inside an anchor reports not found: prefer the rendered HTML); `revision` lists records assessed
     against another or an unknown `provenance.manuscript_rev`; `sources` maps a record `key` to the
     source's full text and re-checks each quote against it (`matched`, `not_found`, `no_source`);
-    `source_urls` maps a record `key` to a public http(s) URL whose text (HTML or plain text, up to
-    10 MB) the server fetches itself and adds to `sources` (a key in both is an error). Hosts that
-    are not public, including via redirects, are refused; fetches that fail are listed with a short
-    reason under `quotes.fetch_failed`, and their records count as `no_source`.
+    `source_urls` maps a record `key` to a public http(s) URL whose text (HTML, plain text or a
+    PDF with a text layer, up to 10 MB; hyphenation across PDF lines can make a quote
+    `not_found`) the server fetches itself and adds to `sources` (a key in both is an error).
+    Hosts that are not public, including via redirects, are refused; fetches that fail are
+    listed with a short reason under `quotes.fetch_failed`, and their records count as `no_source`.
     `bibliography` is a .bib or CSL JSON file; for an HTML `work` without one, its `ref-<key>`
     entries serve. Withdrawn records are skipped unless `include_withdrawn`."""
     return checks.check_ledger(

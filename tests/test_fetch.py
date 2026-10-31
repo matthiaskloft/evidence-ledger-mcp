@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import io
 import json
 import socket
 import threading
@@ -156,9 +157,9 @@ def test_bad_scheme_is_refused(path: str, monkeypatch: pytest.MonkeyPatch, url: 
 
 
 def test_unsupported_type_and_http_error(path: str, monkeypatch: pytest.MonkeyPatch) -> None:
-    Net(monkeypatch, {"https://a.org/f.pdf": page("%PDF", "application/pdf")})
-    assert quotes(path, "https://a.org/f.pdf")["fetch_failed"] == {
-        "exampleStudy2026": "unsupported content type application/pdf"
+    Net(monkeypatch, {"https://a.org/f.zip": page("PK", "application/zip")})
+    assert quotes(path, "https://a.org/f.zip")["fetch_failed"] == {
+        "exampleStudy2026": "unsupported content type application/zip"
     }
     assert quotes(path, "https://a.org/missing")["fetch_failed"] == {"exampleStudy2026": "HTTP 404"}
 
@@ -387,3 +388,108 @@ def test_header_drip_hits_the_total_deadline() -> None:
 
 def test_unusable_charset_falls_back_to_utf8() -> None:
     assert fetch._text(page(QUOTE, "text/plain", charset="idna")) == QUOTE
+
+
+def make_pdf(*lines: str) -> bytes:
+    """A minimal one-page PDF with the lines as Helvetica text; none if no lines are given."""
+    stream = "".join(
+        f"BT /F1 12 Tf 50 {700 - 20 * i} Td ({s}) Tj ET\n" for i, s in enumerate(lines)
+    )
+    objects = [
+        "<< /Type /Catalog /Pages 2 0 R >>",
+        "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R"
+        " /Resources << /Font << /F1 5 0 R >> >> >>",
+        f"<< /Length {len(stream)} >>\nstream\n{stream}endstream",
+        "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+    ]
+    out = b"%PDF-1.4\n"
+    offsets = []
+    for number, body in enumerate(objects, 1):
+        offsets.append(len(out))
+        out += f"{number} 0 obj\n{body}\nendobj\n".encode("latin-1")
+    xref = len(out)
+    out += f"xref\n0 {len(objects) + 1}\n0000000000 65535 f \n".encode()
+    out += "".join(f"{offset:010d} 00000 n \n" for offset in offsets).encode()
+    out += (
+        f"trailer\n<< /Size {len(objects) + 1} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n".encode()
+    )
+    return out
+
+
+def test_pdf_text_is_extracted(path: str, monkeypatch: pytest.MonkeyPatch) -> None:
+    pdf = make_pdf("Intro line", QUOTE)
+    Net(monkeypatch, {"https://a.org/f.pdf": page(pdf, "application/pdf", charset=None)})
+    assert "Intro line" in fetch.fetch_text("https://a.org/f.pdf")
+    assert quotes(path, "https://a.org/f.pdf")["matched"] == ["R-0001"]
+
+
+def test_pdf_failures_give_fixed_reasons(path: str, monkeypatch: pytest.MonkeyPatch) -> None:
+    import pypdf
+
+    writer = pypdf.PdfWriter()
+    writer.add_blank_page(100, 100)
+    writer.encrypt("secret")
+    locked = io.BytesIO()
+    writer.write(locked)
+    cases = {
+        "garbage": (b"not a pdf at all", "unreadable pdf"),
+        "locked": (locked.getvalue(), "encrypted pdf"),
+        "scan": (make_pdf(), "no text in pdf"),
+    }
+    Net(
+        monkeypatch,
+        {
+            f"https://a.org/{k}.pdf": page(b, "application/pdf", charset=None)
+            for k, (b, _) in cases.items()
+        },
+    )
+    for name, (_, reason) in cases.items():
+        assert quotes(path, f"https://a.org/{name}.pdf")["fetch_failed"] == {
+            "exampleStudy2026": reason
+        }
+
+
+def test_pdf_with_too_many_pages_is_refused(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(fetch, "MAX_PAGES", 0)
+    Net(monkeypatch, {"https://a.org/f.pdf": page(make_pdf("x"), "application/pdf", charset=None)})
+    with pytest.raises(fetch.FetchError, match="pdf too long"):
+        fetch.fetch_text("https://a.org/f.pdf")
+
+
+def test_pdf_with_only_an_owner_password_is_read(monkeypatch: pytest.MonkeyPatch) -> None:
+    import pypdf
+
+    reader = pypdf.PdfReader(io.BytesIO(make_pdf("Open text")))
+    writer = pypdf.PdfWriter(clone_from=reader)
+    writer.encrypt("", owner_password="owner")
+    locked = io.BytesIO()
+    writer.write(locked)
+    Net(
+        monkeypatch,
+        {"https://a.org/f.pdf": page(locked.getvalue(), "application/pdf", charset=None)},
+    )
+    assert "Open text" in fetch.fetch_text("https://a.org/f.pdf")
+
+
+def test_pdf_served_under_other_types_is_recognised(monkeypatch: pytest.MonkeyPatch) -> None:
+    pdf = make_pdf("Typed text")
+    Net(
+        monkeypatch,
+        {
+            "https://a.org/x": page(pdf, "application/x-pdf", charset=None),
+            "https://a.org/o": page(pdf, "application/octet-stream", charset=None),
+            "https://a.org/z": page(b"PK\x03\x04", "application/octet-stream", charset=None),
+        },
+    )
+    assert "Typed text" in fetch.fetch_text("https://a.org/x")
+    assert "Typed text" in fetch.fetch_text("https://a.org/o")
+    with pytest.raises(fetch.FetchError, match="unsupported content type"):
+        fetch.fetch_text("https://a.org/z")
+
+
+def test_slow_pdf_extraction_is_stopped(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(fetch, "PDF_TIMEOUT", 0)
+    Net(monkeypatch, {"https://a.org/f.pdf": page(make_pdf("x"), "application/pdf", charset=None)})
+    with pytest.raises(fetch.FetchError, match="pdf too slow"):
+        fetch.fetch_text("https://a.org/f.pdf")

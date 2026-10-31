@@ -130,10 +130,10 @@ def test_statuses(path: str, folder: Path) -> None:
     (folder / "article.pdf").write_bytes(ARTICLE)
     (folder / "broken.pdf").write_bytes(b"%PDF-1.4 not really")
     result = resolve(path, folder)
-    assert result["found"] == ["R-0001"]
+    assert result["found"] == ["R-0001", "R-0004"]  # an ellipsis recorded as part of the quote
     assert result["passage_not_found"] == ["R-0002"]
     assert result["source_not_found"] == ["R-0003"]
-    assert result["not_searchable"] == ["R-0004"]
+    assert result["not_searchable"] == []
     assert result["unreadable_files"] == {str((folder / "broken.pdf").resolve()): "unreadable pdf"}
 
 
@@ -274,3 +274,42 @@ def test_link_file_must_not_be_the_ledger(tmp_path: Path, folder: Path) -> None:
     with pytest.raises(ValueError, match="must not be the ledger"):
         links.resolve_links(ledger_path, str(folder), ledger_path)
     assert ledger.read(ledger_path)[0]["work"] == WORK
+
+
+def test_quote_with_leading_ellipsis_is_found_whole(path: str, folder: Path) -> None:
+    add(path, quote="… " + QUOTE)
+    (folder / "article.pdf").write_bytes(ARTICLE)
+    assert resolve(path, folder)["found"] == ["R-0001"]
+
+
+def test_common_edge_words_are_bounded(
+    path: str, folder: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    add(path, quote="Ledger … manuscript")
+    record = ledger.get_record(path, "R-0001")
+    monkeypatch.setattr(links, "MAX_CANDIDATES", 3)
+    pages = [" ".join(["Ledger x manuscript"] * 5)]
+    assert links._find(record, pages) is None
+
+
+def test_doi_wrapped_across_lines(path: str, folder: Path) -> None:
+    add(path)
+    pdf = make_pdf(["Example study", "https://doi.org/10.1000/", "example Received 2026"], [QUOTE])
+    (folder / "x.pdf").write_bytes(pdf)
+    assert resolve(path, folder)["found"] == ["R-0001"]
+
+
+def test_longer_doi_does_not_match(path: str, folder: Path) -> None:
+    add(path)
+    (folder / "x.pdf").write_bytes(make_pdf(["doi: 10.1000/example2."], [QUOTE]))
+    assert resolve(path, folder)["source_not_found"] == ["R-0001"]
+    (folder / "y.pdf").write_bytes(make_pdf(["doi: 10.1000/example."], [QUOTE]))
+    assert resolve(path, folder)["found"] == ["R-0001"]
+
+
+def test_link_file_must_not_be_the_bibliography(path: str, folder: Path) -> None:
+    bib = folder.parent / "refs.private.json"
+    bib.write_text("[]", "utf-8")
+    with pytest.raises(ValueError, match="bibliography"):
+        links.resolve_links(path, str(folder), str(bib), bibliography=str(bib))
+    assert bib.read_text("utf-8") == "[]"

@@ -12,6 +12,46 @@ The schema and server have independent versions, repositories and releases. This
 
 The MCP server and its associated documentation use the [MIT licence](LICENSE). The bundled schema uses [CC BY 4.0](schema/LICENSE), with attribution to Matthias Kloft. These licences do not cover ledger contents or third-party source material.
 
+## The evidence ledger schema
+
+Every ledger this server writes follows the **[evidence ledger schema](https://github.com/matthiaskloft/evidence-ledger-schema#readme)** (JSON Schema, draft 2020-12), currently **v0.4.0**. The schema is the contract: any tool, script or person can read, validate and check a ledger with it, with or without this server. Its README documents the purpose, the file shapes, every record field, quote hashing, a minimal example and the sources the fields draw on. The server bundles a pinned copy in [`schema/`](schema/) and reports the supported version through `schema_info`.
+
+A ledger is a header (`schema_version`, `work` and optional notes) followed by records. Each record links one claim in the work to one source passage:
+
+| Field | Required | Content |
+| --- | --- | --- |
+| `id`, `claim_id` | yes | Record and claim IDs; the server assigns them. Records about the same claim share a `claim_id`. |
+| `claim`, `claim_type`, `contestable` | yes | The claim, its type (`empirical`, `definition`, `method`, `background`) and whether it needs full evidence; `false` needs a `contestable_reason`. |
+| `anchor` | yes | Where the claim sits in the work: its `exact` text (with optional `prefix`/`suffix`) or a `marker`. |
+| `key` | yes | The source's citation key, with `doi`, `isbn` or `url`, or a `no_identifier_reason`. |
+| `locator` | | Where in the source: `page`, `section`, `figure` or `table`. |
+| `quote`, `quote_focus` | | A short quote from the source, and the phrase within it that carries the claim; `quote_hash` is computed by the server. |
+| `relation`, `justification` | `relation` | How the source bears on the claim (`supports`, `partially_supports`, `background`, `method`, `contrasts`) and why. |
+| `retrieved_via`, `provenance` | yes | How the passage was found, and who assessed it (person or agent and model), when, and against which revision of the work. |
+| `withdrawn` | | The reason a citation was withdrawn; records are never deleted. |
+
+A minimal record, as passed to `add_record` (the server adds the IDs, hash and date):
+
+```json
+{
+  "claim": "Retrieval practice improves long-term retention.",
+  "claim_type": "empirical",
+  "contestable": true,
+  "anchor": {"exact": "testing improves later recall"},
+  "key": "example2020",
+  "doi": "10.1234/example",
+  "locator": {"page": 12},
+  "quote": "participants who were tested recalled more after one week",
+  "relation": "supports",
+  "justification": "Direct experimental evidence for the claim.",
+  "retrieved_via": "pdf"
+}
+```
+
+with `provenance` such as `{"by_type": "agent", "by": "Claude Code", "model": "claude-opus-5-5"}`.
+
+The server stores ledgers as JSON Lines (`.jsonl`, one record per line), because new records are appended as single lines, concurrent additions rarely conflict, and agents write JSON reliably. It reads JSON Lines and exports JSON or JSON Lines; YAML ledgers written by hand remain valid under the schema.
+
 ## What it does
 
 - **Write ledgers safely.** Records are validated against the schema before they are appended. The server assigns record and claim IDs, computes quote hashes and dates the provenance instead of leaving them to the agent.
@@ -20,13 +60,7 @@ The MCP server and its associated documentation use the [MIT licence](LICENSE). 
 - **Share without leaking sources.** Exports and summaries come at three levels: `full` (private), `masked` (short excerpts) and `locator` (no quoted text). A publication check refuses to write a file that carries more source text than its level allows.
 - **Read it as a report.** A standalone HTML summary, grouped by claim, prints to PDF from a browser.
 - **See the evidence in the work.** The claims are marked in the work's own HTML and linked to their evidence, as end notes or in a side panel.
-- **Check it against the work and its sources.** Find anchors that no longer appear in the work, records assessed against another revision, quotes that the source text no longer holds, and citation keys missing from the bibliography.
-
-## Ledger format
-
-Ledgers follow the [evidence ledger schema](https://github.com/matthiaskloft/evidence-ledger-schema#readme), which documents the purpose, the file shapes, record fields, quote hashing, a minimal example and the sources the fields draw on. The server bundles a pinned copy in [`schema/`](schema/).
-
-The server stores ledgers as JSON Lines (`.jsonl`, one record per line), because new records are appended as single lines, concurrent additions rarely conflict, and agents write JSON reliably. It reads JSON Lines and exports JSON or JSON Lines; YAML ledgers written by hand remain valid under the schema.
+- **Check it against the work and its sources.** Find anchors that no longer appear in the work, records assessed against another revision, quotes that the source text no longer holds, and citation keys missing from the bibliography. Source text can be passed in, or the server fetches it from public URLs (web pages, plain text and PDFs with a text layer).
 
 ## Installation
 
@@ -68,7 +102,8 @@ Pass absolute ledger paths to tools; relative paths resolve against the server's
 1. `create_ledger` once per work, next to the manuscript or code.
 2. `add_record` whenever a source is cited, with the claim, its anchor, the source key, locator, quote, relation and justification. The server fills in IDs, the quote hash and the provenance date.
 3. `find_records` with `missing_evidence` and `validate_ledger` before submission, to find claims still lacking evidence.
-4. `export_ledger` or `summarize_ledger` at `masked` or `locator` level to share the ledger with co-authors, reviewers or a journal.
+4. `check_ledger` with the rendered work, its bibliography and the sources (as text or public URLs), to catch anchors, keys and quotes that no longer match.
+5. `export_ledger`, `summarize_ledger` or `embed_ledger` at `masked` or `locator` level to share the ledger with co-authors, reviewers or a journal.
 
 ### Exports and summaries
 

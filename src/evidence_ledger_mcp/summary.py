@@ -40,43 +40,66 @@ STYLE = """
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--text);
   font: 16px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif; }
-main { max-width: 54rem; margin: 0 auto; padding: 2rem 1rem 4rem; }
-a { color: var(--accent); }
-h1 { font-size: 1.6rem; margin: 0 0 0.5rem; }
-.id { font-weight: 600; color: var(--muted); margin-right: 0.5rem; }
-.meta { display: flex; flex-wrap: wrap; gap: 0.4rem 1.75rem; margin: 0.6rem 0;
-  font-size: 0.88rem; }
-.meta div { min-width: 7rem; }
-.meta dt { font-size: 0.68rem; font-weight: 600; text-transform: uppercase;
-  letter-spacing: 0.05em; color: var(--muted); }
-.meta dd { margin: 0; overflow-wrap: anywhere; }
-section.claim { background: var(--card); border: 1px solid var(--line); border-radius: 8px;
-  margin-top: 1.75rem; overflow: hidden; }
-.claim-part { padding: 1.1rem 1.4rem 0.6rem; }
-.evidence { border-top: 1px solid var(--line);
-  padding: 0.2rem 1.4rem 0.6rem; }
-.claim-text { font-size: 1.2rem; font-weight: 600; line-height: 1.4; margin: 0.15rem 0 0.6rem; }
-.label { font-size: 0.7rem; font-weight: 600; text-transform: uppercase;
-  letter-spacing: 0.06em; color: var(--muted); margin: 1.25rem 0 0.5rem; }
-article.record { padding: 0.9rem 0; }
-article.record + article.record { border-top: 1px solid var(--line); }
-.record-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.6rem; }
-.key { font-weight: 600; }
-.relation { font-size: 0.75rem; font-weight: 600; padding: 0.05rem 0.5rem;
-  border: 1px solid currentColor; border-radius: 999px; color: var(--other); }
+main { max-width: 70ch; margin: 0 auto; padding: 2.5rem 1rem 5rem; }
+a { color: var(--accent); text-decoration: underline; text-underline-offset: 0.15em; }
+h1 { font-size: 1.5rem; line-height: 1.3; margin: 0 0 0.75rem; }
+.id { font-weight: 600; font-size: 0.85rem; color: var(--muted); margin-right: 0.5rem; }
+.meta { display: flex; flex-wrap: wrap; gap: 0.35rem 1.5rem; margin: 0.6rem 0;
+  font-size: 0.85rem; color: var(--muted); }
+.meta div { min-width: 6rem; }
+.meta dt { font-size: 0.85rem; }
+.meta dd { margin: 0; overflow-wrap: anywhere; color: var(--text); opacity: 0.8; }
+section.claim { background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+  margin-top: 2.25rem; overflow: hidden; }
+.claim-part { padding: 1.4rem 1.6rem 0.8rem; }
+.evidence { border-top: 1px solid var(--line); padding: 0.4rem 1.6rem 1.2rem; }
+.claim-text { font-size: 1.2rem; font-weight: 600; line-height: 1.45; margin: 0 0 0.8rem; }
+.label { font-size: 0.85rem; font-weight: 600; text-transform: uppercase;
+  letter-spacing: 0.06em; color: var(--muted); margin: 1.2rem 0 0.4rem; }
+article.record { padding: 1rem 0 0.4rem; }
+article.record + article.record { margin-top: 0.8rem; padding-top: 1.4rem;
+  border-top: 1px solid var(--line); }
+.record-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.2rem 0.7rem;
+  margin-bottom: 0.6rem; }
+.key { font-weight: 600; overflow-wrap: anywhere; }
+.relation { font-size: 0.85rem; color: var(--other); }
 .rel-supports { color: var(--supports); }
 .rel-partially_supports { color: var(--partial); }
 .rel-contrasts { color: var(--contrasts); }
-blockquote { margin: 0.7rem 0; padding: 0.1rem 0 0.1rem 1rem;
-  border-left: 3px solid var(--line); font-family: Georgia, "Times New Roman", serif;
-  font-size: 1.02rem; font-style: italic; }
-.anchor { margin: 0 0 0.6rem; padding: 0.1rem 0 0.1rem 0.9rem; border-left: 3px solid var(--line); }
-mark { background: none; color: inherit; font-weight: 700;
+blockquote, .anchor { margin: 0.8rem 0; padding: 0 0 0 1rem; border-left: 2px solid var(--line);
+  color: var(--muted); font-family: Georgia, "Times New Roman", serif; font-size: 1rem;
+  font-style: italic; line-height: 1.6; }
+mark { background: none; color: inherit; font-style: inherit;
   text-decoration: underline 2px var(--accent); text-underline-offset: 0.2em; }
-.justification, .note { margin: 0.5rem 0; }
-.note { color: var(--muted); }
-.provenance { margin: 0.5rem 0 0; font-size: 0.8rem; color: var(--muted); }
+.justification, .note { margin: 0.6rem 0; }
+.note { color: var(--muted); font-size: 0.85rem; }
+.more { margin-top: 0.7rem; font-size: 0.85rem; color: var(--muted); }
+.claim-part .meta, .more .meta { display: grid; grid-template-columns: max-content 1fr;
+  gap: 0.2rem 1rem; margin: 0.6rem 0; }
+.more .meta { margin: 0; padding-top: 0.6rem; border-top: 1px dashed var(--line); }
+.claim-part .meta div, .more .meta div { display: contents; }
+.claim-part .meta dd, .more .meta dd { color: var(--text); opacity: 0.8; min-width: 0;
+  line-break: anywhere; }
+.toc { margin: 2rem 0 0; }
+.toc ul { list-style: none; margin: 0; padding: 0; }
+.toc li { display: flex; align-items: center; gap: 0.3rem; font-size: 0.85rem;
+  padding: 0.2rem 0; border-bottom: 1px solid var(--line); }
+.toc a { display: flex; gap: 0.5rem; min-width: 0; flex: 1; color: var(--text);
+  text-decoration: none; }
+.toc a:hover .toc-text { text-decoration: underline; }
+.toc-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dot { width: 0.5rem; height: 0.5rem; border-radius: 50%; flex: none; background: var(--other); }
+.dot.rel-supports { background: var(--supports); }
+.dot.rel-partially_supports { background: var(--partial); }
+.dot.rel-contrasts { background: var(--contrasts); }
+.up { float: right; font-size: 0.85rem; color: var(--muted); text-decoration: none; }
+.up:hover { text-decoration: underline; }
 .withdrawn { color: var(--contrasts); font-weight: 600; }
+@media (max-width: 40rem) {
+  main { padding: 1.5rem 0.75rem 3rem; }
+  .claim-part { padding: 1.1rem 1rem 0.6rem; }
+  .evidence { padding: 0.3rem 1rem 1rem; }
+}
 @media print {
   :root { --bg: #fff; --card: #fff; --text: #000; --muted: #444;
     --line: #999; --accent: #000; }
@@ -162,7 +185,16 @@ def _record(record: Record, key_href: str | None = None) -> str:
         if "withdrawn" in record
         else ""
     )
-    quote = f"<blockquote>{_e(record['quote'])}</blockquote>" if "quote" in record else ""
+    quote = ""
+    if isinstance(text := record.get("quote"), str):
+        # Underline the phrase that carries the claim, when it occurs once in the quote.
+        focus = record.get("quote_focus")
+        if isinstance(focus, str) and focus and text.count(focus) == 1:
+            before, after = text.split(focus)
+            body_html = f"{_e(before)}<mark>{_e(focus)}</mark>{_e(after)}"
+        else:
+            body_html = _e(text)
+        quote = f"<blockquote>{body_html}</blockquote>"
     body = (
         quote
         + _prose("justification", "Why", record.get("justification"))
@@ -188,12 +220,12 @@ def _record(record: Record, key_href: str | None = None) -> str:
             ),
             ("Zotero link", _e(record.get("zotero_link", ""))),
             ("derived from", _e(record.get("derived_from", ""))),
+            ("added by", _provenance(record)),
         ]
     )
-    prov = _provenance(record)
-    added = f'<p class="provenance">Added by {prov}</p>' if prov else ""
     rid = _e(record.get("id", ""))
-    return f'<article class="record" data-record="{rid}">{head}{gone}{body}{meta}{added}</article>'
+    more = f'<div class="more">{meta}</div>' if meta else ""
+    return f'<article class="record" data-record="{rid}">{head}{gone}{body}{more}</article>'
 
 
 def _anchor(anchor: object) -> str:
@@ -261,10 +293,33 @@ def _claim_parts(
     return head, f"{label}{body}"
 
 
-def _claim(claim_id: str, records: list[Record]) -> str:
-    head, evidence = _claim_parts(claim_id, records)
+def toc(groups: dict[str, list[Record]], href: str, p: str = "") -> str:
+    """A list of the claims, each a link to its card with a dot per record coloured by relation;
+    empty for fewer than two claims. `p` prefixes the class names."""
+    if len(groups) < 2:
+        return ""
+    items = ""
+    for cid, records in groups.items():
+        dots = "".join(
+            f'<span class="{p}dot {p}rel-{_e(rel)}" title="{_e(rel.replace("_", " "))}"></span>'
+            for rel in (str(r.get("relation", "")) for r in records)
+        )
+        items += (
+            f'<li><a href="#{href}{_e(cid)}"><span class="{p}id">{_e(cid)}</span>'
+            f'<span class="{p}toc-text">{_e(records[0].get("claim", ""))}</span></a>{dots}</li>'
+        )
     return (
-        f'<section class="claim"><div class="claim-part">{head}</div>'
+        f'<nav class="{p}toc" id="{p}contents" aria-label="Claims">'
+        f'<p class="{p}label">Claims</p><ul>{items}</ul></nav>'
+    )
+
+
+def _claim(claim_id: str, records: list[Record], up: bool = False) -> str:
+    head, evidence = _claim_parts(claim_id, records)
+    back = '<a class="up" href="#contents">↑ contents</a>' if up else ""
+    return (
+        f'<section class="claim" id="claim-{_e(claim_id)}">'
+        f'<div class="claim-part">{back}{head}</div>'
         f'<div class="evidence">{evidence}</div></section>'
     )
 
@@ -302,7 +357,8 @@ def render(header: dict[str, Any], records: list[Record], level: str) -> str:
             ("location", _e(work.get("location", ""))),
         ]
     )
-    claims = "".join(_claim(cid, recs) for cid, recs in groups.items())
+    contents = toc(groups, "claim-")
+    claims = "".join(_claim(cid, recs, bool(contents)) for cid, recs in groups.items())
     return (
         '<!DOCTYPE html>\n<html lang="en"><head><meta charset="utf-8">'
         '<meta name="viewport" content="width=device-width, initial-scale=1">'
@@ -310,7 +366,7 @@ def render(header: dict[str, Any], records: list[Record], level: str) -> str:
         f"<title>{title}: evidence ledger summary</title><style>{STYLE}</style></head>"
         f"<body><main><h1>{title}: evidence ledger summary</h1>{meta}"
         f"{_prose('note', 'Description', header.get('description'))}"
-        f"{_prose('note', 'Notes', header.get('notes'))}{claims}</main>"
+        f"{_prose('note', 'Notes', header.get('notes'))}{contents}{claims}</main>"
         f"{data_script(records, level)}</body>"
         "</html>\n"
     )

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import Any
 
@@ -206,7 +207,7 @@ def test_relink_writes_a_private_copy_with_relative_links(path: str, folder: Pat
     assert "<title>[Private] " in html and 'class="el-private"' in html
     assert '<meta name="robots" content="noindex">' in html
     assert 'href="pdfs/sub/article.pdf#page=2"' in html
-    assert "passage found" in html
+    assert 'title="article.pdf, PDF page 2"' in html and "passage not" not in html
     assert "Your copy" not in original.read_text("utf-8")
 
 
@@ -216,7 +217,9 @@ def test_relink_locator_export_uses_cited_page(path: str, folder: Path) -> None:
     result = links.relink_html(str(summary_html(path, folder, "locator")), str(folder))
     assert result["not_searchable"] == ["R-0001"]
     html = Path(result["path"]).read_text("utf-8")
-    assert "article.pdf#page=2" in html and "assuming the cited page number" in html
+    assert (
+        "article.pdf#page=2" in html and "passage not searched, opens the cited page number" in html
+    )
 
 
 def test_relink_absolute_link_outside_the_copy_folder(
@@ -265,7 +268,7 @@ def test_cited_page_maps_through_page_labels(path: str, folder: Path) -> None:
     add(path, locator={"page": 347})
     result = links.relink_html(str(summary_html(path, folder, "locator")), str(folder))
     html = Path(result["path"]).read_text("utf-8")
-    assert "article.pdf#page=2" in html and "from the cited page" in html
+    assert "article.pdf#page=2" in html and "passage not searched, opens the cited page" in html
 
 
 def test_link_file_must_not_be_the_ledger(tmp_path: Path, folder: Path) -> None:
@@ -489,3 +492,114 @@ def test_no_match_from_a_scan_cut_short(
     result = resolve(path, folder)  # reads a.pdf, then runs out of time before b.pdf
     assert result["source_not_found"] == ["R-0001"]
     assert result["time_limit"]["files_not_read"] == 1
+
+
+def write_map(tmp_path: Path, sources: dict[str, Any], name: str = "map.private.json") -> str:
+    target = tmp_path / name
+    target.write_text(
+        json.dumps({"link_map_version": "0.1.0", "sources": sources}), encoding="utf-8"
+    )
+    return str(target)
+
+
+def test_file_named_after_the_key_wins_over_doi(path: str, folder: Path) -> None:
+    add(path)
+    (folder / "article.pdf").write_bytes(make_pdf(["Results"], ["doi: 10.1000/example"]))
+    (folder / "exampleStudy2026.pdf").write_bytes(make_pdf(["Results", QUOTE]))
+    result = resolve(path, folder)
+    saved = json.loads((folder.parent / "links.private.json").read_text("utf-8"))
+    assert result["found"] == ["R-0001"]
+    assert saved["records"]["R-0001"]["file"].endswith("exampleStudy2026.pdf")
+
+
+def test_link_map_happy_path(path: str, tmp_path: Path) -> None:
+    add(path)
+    pdf = tmp_path / "anything.pdf"
+    pdf.write_bytes(ARTICLE)
+    mapped = write_map(tmp_path, {"exampleStudy2026": {"file": str(pdf)}})
+    result = links.resolve_links(path, None, str(tmp_path / "l.private.json"), link_map=mapped)
+    assert result["found"] == ["R-0001"]
+
+
+def test_key_not_in_map(path: str, tmp_path: Path) -> None:
+    add(path)
+    mapped = write_map(tmp_path, {"other": {"file": str(tmp_path / "x.pdf")}})
+    result = links.resolve_links(path, None, str(tmp_path / "l.private.json"), link_map=mapped)
+    assert result["not_in_map"] == ["R-0001"] and result["found"] == []
+
+
+def test_map_with_folder_fallback(path: str, folder: Path, tmp_path: Path) -> None:
+    add(path)
+    add(path, key="otherKey2020", doi=None, url="https://example.org/o")
+    mapped_pdf = tmp_path / "m.pdf"
+    mapped_pdf.write_bytes(ARTICLE)
+    (folder / "otherKey2020.pdf").write_bytes(make_pdf(["Results", QUOTE]))
+    mapped = write_map(tmp_path, {"exampleStudy2026": {"file": str(mapped_pdf)}})
+    result = links.resolve_links(
+        path, str(folder), str(tmp_path / "l.private.json"), link_map=mapped
+    )
+    assert result["found"] == ["R-0001", "R-0002"]
+
+
+def test_invalid_map_is_rejected(path: str, tmp_path: Path) -> None:
+    add(path)
+    bad = tmp_path / "bad.private.json"
+    bad.write_text(json.dumps({"link_map_version": "0.1.0", "sources": {"k": {}}}), "utf-8")
+    with pytest.raises(ValueError, match="not a valid link map"):
+        links.resolve_links(path, None, str(tmp_path / "l.private.json"), link_map=str(bad))
+    unsafe = write_map(
+        tmp_path, {"k": {"file": "a.pdf", "open": "javascript:alert(1)"}}, "u.private.json"
+    )
+    with pytest.raises(ValueError, match="not a safe link"):
+        links.resolve_links(path, None, str(tmp_path / "l.private.json"), link_map=unsafe)
+    for sneaky in (" javascript:alert(1)", "java	script:alert(1)", "JavaScript:x"):
+        unsafe = write_map(tmp_path, {"k": {"file": "a.pdf", "open": sneaky}}, "s.private.json")
+        with pytest.raises(ValueError, match="not a safe link"):
+            links.resolve_links(path, None, str(tmp_path / "l.private.json"), link_map=unsafe)
+
+
+def test_map_name_must_end_in_private_json(path: str, tmp_path: Path) -> None:
+    add(path)
+    mapped = write_map(tmp_path, {}, "map.json")
+    with pytest.raises(ValueError, match=r"\.private\.json"):
+        links.resolve_links(path, None, str(tmp_path / "l.private.json"), link_map=mapped)
+
+
+def test_relink_renders_open_in_library_with_page(path: str, folder: Path, tmp_path: Path) -> None:
+    add(path)
+    pdf = folder / "a.pdf"
+    pdf.write_bytes(ARTICLE)
+    uri = "zotero://open-pdf/library/items/ABCD1234"
+    mapped = write_map(tmp_path, {"exampleStudy2026": {"file": str(pdf), "open": uri}})
+    result = links.relink_html(str(summary_html(path, folder)), link_map=mapped)
+    html = Path(result["path"]).read_text("utf-8")
+    assert f'href="{uri}?page=2"' in html and "Open in library" in html
+    assert "a.el-btn" in html
+    for label in ("Open PDF", "Open in library"):
+        assert re.search(
+            rf'<a class="[^"]*" target="_blank" rel="noopener noreferrer" '
+            rf'href="[^"]*" title="[^"]*">{label}</a>',
+            html,
+        )
+
+
+def test_copy_note_follows_status_not_page_source() -> None:
+    base = Path("/tmp")
+    found = {"status": "found", "file": "/tmp/a.pdf", "page": 2, "page_from": "passage"}
+    assert "el-where" not in links._copy_link(found, base)
+    missed = {
+        "status": "passage_not_found",
+        "file": "/tmp/a.pdf",
+        "page": 2,
+        "page_from": "page_number",
+    }
+    assert "passage not found, opens the cited page number" in links._copy_link(missed, base)
+    unsearched = {
+        "status": "not_searchable",
+        "file": "/tmp/a.pdf",
+        "page": 2,
+        "page_from": "page_label",
+    }
+    assert "passage not searched, opens the cited page<" in links._copy_link(unsearched, base)
+    no_page = {"status": "passage_not_found", "file": "/tmp/a.pdf"}
+    assert "passage not found, opens the first page" in links._copy_link(no_page, base)

@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "evidence-ledger link map",
+  "type": "object",
+  "required": ["link_map_version", "sources"],
+  "properties": {
+    "link_map_version": {"const": "0.1.0"},
+    "private": {"type": "string", "description": "Notice that the map holds local paths and must not be shared."},
+    "sources": {
+      "type": "object",
+      "description": "Keyed by the ledger's citation keys.",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["file"],
+        "properties": {
+          "file": {"type": "string", "minLength": 1, "description": "Absolute path to the PDF."},
+          "open": {"type": "string", "format": "uri", "description": "Optional link that opens the item in the reader's library; the server appends the page."},
+          "library": {"type": "string", "description": "Optional name of the library that produced the entry, e.g. zotero."}
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

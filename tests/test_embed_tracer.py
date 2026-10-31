@@ -77,7 +77,7 @@ async def embed(tmp: Path) -> None:
         assert html.index("Not located in the work") < html.index('id="el-C-0002"')
         assert QUOTE in html
         assert html.count("<style>") == 1
-        assert ("<aside" in html and "<script>" in html) == (layout == "panel")
+        assert f'data-layout="{layout}"' in html and "<script>" in html
         assert html.count("<h1>Example work</h1>") == 1
 
 

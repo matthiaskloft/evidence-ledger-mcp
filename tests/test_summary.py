@@ -193,3 +193,13 @@ def test_grouping_preserves_different_markers(path: str, level: str, exact: str 
     assert "<b>Marker:</b> Discussion &lt;2&gt;" in html
     if exact is not None:
         assert f"<mark>{exact}</mark>" in html
+
+
+def test_contents_list_claims_only_when_several(path: str) -> None:
+    add(path, claim_id="C-0001")
+    assert 'class="toc"' not in summary.render(*ledger.read(path), "full")
+    add(path, claim="Second claim.", claim_id="C-0002", relation="contrasts")
+    html = summary.render(*ledger.read(path), "full")
+    assert html.index('class="toc"') < html.index('<section class="claim"')
+    assert '<a href="#claim-C-0002">' in html and 'id="claim-C-0002"' in html
+    assert 'class="dot rel-contrasts"' in html and 'href="#contents"' in html

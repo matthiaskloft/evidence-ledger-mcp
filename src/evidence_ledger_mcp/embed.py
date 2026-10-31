@@ -19,21 +19,21 @@ STYLE = """
   color-scheme: light;
   --el-bg: #fbfaf7; --el-fg: #1d1d1b; --el-muted: #6b6862; --el-line: #e3dfd6;
   --el-accent: #2f5d8a; --el-hl: #e7eef6; --el-hl2: #c9daec; --el-panel: #fff;
-  --el-quote: #f3f0e8; --el-bad: #a23b2a;
+  --el-quote: #f3f0e8; --el-bad: #a23b2a; --el-ok: #2e7d4f; --el-part: #9a6a00;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     color-scheme: dark;
     --el-bg: #18181a; --el-fg: #e8e6e1; --el-muted: #9a978f; --el-line: #33322f;
     --el-accent: #8ab4e0; --el-hl: #22303f; --el-hl2: #2f4760; --el-panel: #202023;
-    --el-quote: #29292c; --el-bad: #e58a78;
+    --el-quote: #29292c; --el-bad: #e58a78; --el-ok: #5cc489; --el-part: #e0b040;
   }
 }
 :root[data-theme="dark"] {
   color-scheme: dark;
   --el-bg: #18181a; --el-fg: #e8e6e1; --el-muted: #9a978f; --el-line: #33322f;
   --el-accent: #8ab4e0; --el-hl: #22303f; --el-hl2: #2f4760; --el-panel: #202023;
-  --el-quote: #29292c; --el-bad: #e58a78;
+  --el-quote: #29292c; --el-bad: #e58a78; --el-ok: #5cc489; --el-part: #e0b040;
 }
 body { background: var(--el-bg); color: var(--el-fg); }
 body a { color: var(--el-accent); }
@@ -47,40 +47,55 @@ sup.el-ref { font: 600 0.68em/0 system-ui, -apple-system, "Segoe UI", sans-serif
   color: var(--el-muted); margin: 0.5rem 1rem; }
 .el-evidence { margin-top: 3rem; }
 .el-card { background: var(--el-panel); color: var(--el-fg); border: 1px solid var(--el-line);
-  border-radius: 8px; margin: 1rem 0; overflow: hidden; text-align: left;
-  font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  border-radius: 10px; margin: 1rem 0; overflow: hidden; text-align: left;
+  font: 16px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif; }
 .el-card a { color: var(--el-accent); }
 .el-card p, .el-card dl, .el-card dd { margin: 0; }
-.el-claim-part { padding: 0.8rem 1rem 0.4rem; }
-.el-ev { border-top: 1px solid var(--el-line); padding: 0.1rem 1rem 0.5rem; }
-.el-claim-text { font: 17px/1.45 Georgia, "Times New Roman", serif; margin: 0.1rem 0 0.5rem; }
-.el-id { font: 600 0.85rem system-ui, sans-serif; color: var(--el-muted); margin-right: 0.5rem; }
-.el-meta { display: flex; flex-wrap: wrap; gap: 0.3rem 1.25rem; margin: 0.4rem 0;
-  font-size: 0.82rem; color: var(--el-muted); }
-.el-meta div { min-width: 5rem; }
-.el-meta dt { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.05em; }
-.el-meta dd { overflow-wrap: anywhere; }
-.el-label { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em;
-  color: var(--el-muted); margin: 0.9rem 0 0.2rem; }
-.el-record { border-left: 3px solid var(--el-accent); padding: 0.1rem 0 0.1rem 0.7rem;
-  margin: 0.75rem 0; }
-.el-record:has(.el-rel-contrasts) { border-left-color: var(--el-bad); }
-.el-record-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.2rem 0.6rem; }
+.el-claim-part { padding: 1.1rem 1.3rem 0.6rem; }
+.el-ev { border-top: 1px solid var(--el-line); padding: 0.3rem 1.3rem 1rem; }
+.el-claim-text { font-size: 1.15rem; font-weight: 600; line-height: 1.45; margin: 0 0 0.6rem; }
+.el-id { font-weight: 600; font-size: 0.85rem; color: var(--el-muted); margin-right: 0.5rem; }
+.el-meta { display: grid; grid-template-columns: max-content 1fr; gap: 0.2rem 1rem;
+  margin: 0.6rem 0; font-size: 0.85rem; color: var(--el-muted); }
+.el-meta div { display: contents; }
+.el-meta dd { color: var(--el-fg); opacity: 0.8; min-width: 0; line-break: anywhere; }
+.el-more { margin-top: 0.7rem; }
+.el-more .el-meta { margin: 0; padding-top: 0.6rem; border-top: 1px dashed var(--el-line); }
+.el-label { font-size: 0.85rem; font-weight: 600; text-transform: uppercase;
+  letter-spacing: 0.06em; color: var(--el-muted); margin: 1rem 0 0.3rem; }
+.el-record { padding: 0.8rem 0 0.3rem; }
+.el-record + .el-record { margin-top: 0.6rem; padding-top: 1.2rem;
+  border-top: 1px solid var(--el-line); }
+.el-record-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.2rem 0.7rem;
+  margin-bottom: 0.6rem; }
 .el-key { font-weight: 600; overflow-wrap: anywhere; }
-.el-relation { font-size: 0.78rem; color: var(--el-accent); }
+.el-relation { font-size: 0.85rem; color: var(--el-muted); }
+.el-rel-supports { color: var(--el-ok); }
+.el-rel-partially_supports { color: var(--el-part); }
 .el-relation.el-rel-contrasts, .el-withdrawn { color: var(--el-bad); }
 .el-withdrawn { font-weight: 600; }
-.el-card blockquote.el-quote { background: var(--el-quote); margin: 0.5rem 0;
-  padding: 0.4rem 0.6rem; border: 0; color: inherit;
-  font: italic 15px/1.5 Georgia, "Times New Roman", serif; }
-.el-anchor { margin: 0 0 0.4rem; padding: 0.1rem 0 0.1rem 0.8rem;
-  border-left: 3px solid var(--el-line); }
-.el-card mark.el-hl { background: var(--el-hl); color: inherit; padding: 0 1px;
-  border-bottom: 1px dotted var(--el-accent); }
-.el-justification, .el-text-note { margin: 0.4rem 0; }
-.el-text-note { color: var(--el-muted); }
-.el-provenance { margin: 0.4rem 0 0; font-size: 0.78rem; color: var(--el-muted); }
-.el-back { margin: 0; padding: 0.6rem 1rem 0; font-size: 0.85rem; }
+.el-card blockquote.el-quote, .el-anchor { margin: 0.8rem 0; padding: 0 0 0 1rem;
+  border: 0; border-left: 2px solid var(--el-line); background: none; color: var(--el-muted);
+  font: italic 1rem/1.6 Georgia, "Times New Roman", serif; }
+.el-card mark.el-hl, .el-card .el-quote mark { background: none; color: inherit;
+  font-style: inherit; text-decoration: underline 2px var(--el-accent);
+  text-underline-offset: 0.2em; border: 0; padding: 0; }
+.el-justification, .el-text-note { margin: 0.6rem 0; }
+.el-text-note { color: var(--el-muted); font-size: 0.85rem; }
+.el-toc { margin: 0 0 1.5rem; font: 16px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif; }
+.el-toc ul { list-style: none; margin: 0; padding: 0; }
+.el-toc li { display: flex; align-items: center; gap: 0.3rem; font-size: 0.85rem;
+  padding: 0.2rem 0; border-bottom: 1px solid var(--el-line); }
+.el-toc a { display: flex; gap: 0.5rem; min-width: 0; flex: 1; color: var(--el-fg);
+  text-decoration: none; }
+.el-toc a:hover .el-toc-text { text-decoration: underline; }
+.el-toc-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.el-dot { width: 0.5rem; height: 0.5rem; border-radius: 50%; flex: none;
+  background: var(--el-muted); }
+.el-dot.el-rel-supports { background: var(--el-ok); }
+.el-dot.el-rel-partially_supports { background: var(--el-part); }
+.el-dot.el-rel-contrasts { background: var(--el-bad); }
+.el-back { margin: 0; padding: 0.8rem 1.3rem 0; font-size: 0.85rem; }
 @media print {
   :root:root:root { color-scheme: light; --el-bg: #fff; --el-fg: #000; --el-muted: #444;
     --el-line: #999; --el-accent: #000; --el-hl: transparent; --el-hl2: transparent;
@@ -99,7 +114,10 @@ sup.el-ref { font: 600 0.68em/0 system-ui, -apple-system, "Segoe UI", sans-serif
 # Panel layout only: the text keeps clear of a fixed side panel (a bottom sheet when narrow).
 PANEL_STYLE = """
 mark.el-claim { scroll-margin-top: 4rem; }
-html.el-js mark.el-claim { cursor: pointer; }
+html.el-panel mark.el-claim { cursor: pointer; }
+html:not(.el-panel) #el-card, html:not(.el-panel) .el-howto { display: none; }
+.el-toggle { font: inherit; color: var(--el-accent); background: none; cursor: pointer;
+  border: 1px solid var(--el-line); border-radius: 4px; padding: 0 0.5rem; margin-left: 0.5rem; }
 #el-card { position: fixed; left: 0; right: 0; bottom: 0; max-height: 70vh; z-index: 2000;
   overflow-y: auto; background: var(--el-panel); color: var(--el-fg);
   border-top: 1px solid var(--el-line); border-radius: 12px 12px 0 0;
@@ -116,15 +134,17 @@ html.el-js mark.el-claim { cursor: pointer; }
 html.el-open body { padding-bottom: 70vh; }
 @media screen {
   /* With the panel working, located claims are read there; the end cards remain for print. */
-  html.el-js .el-evidence > .el-card:has(.el-back), html.el-js .el-evidence:not(:has(h3)) {
+  html.el-panel .el-evidence > .el-card:has(.el-back),
+  html.el-panel .el-evidence > .el-toc, html.el-panel .el-evidence:not(:has(h3)) {
     display: none; }
 }
-@media (min-width: 1100px) {
-  html.el-js { padding-right: min(400px, 32vw); }
+@media (min-width: 900px) {
+  html.el-panel { padding-right: clamp(300px, 36vw, 420px); }
   html.el-open body { padding-bottom: 0; }
   .el-esc { display: none; }
-  #el-card { left: auto; top: 0; bottom: 0; right: 0; width: min(400px, 32vw); max-height: none;
-    border: 0; border-left: 1px solid var(--el-line); border-radius: 0; box-shadow: none;
+  #el-card { left: auto; top: 0; bottom: 0; right: 0; width: clamp(300px, 36vw, 420px);
+    max-height: none; border: 0; border-left: 1px solid var(--el-line); border-radius: 0;
+    box-shadow: none;
     padding: 1rem; }
   #el-card button[data-el="0"] { display: none; }
 }
@@ -140,17 +160,29 @@ SCRIPT = """
   var hint = document.querySelector(".el-hint");
   var root = document.documentElement;
   var current = null;
-  var wide = matchMedia("(min-width: 1100px)");
+  var wide = matchMedia("(min-width: 900px)");
+  var toggle = document.querySelector(".el-toggle");
+  var mode = panel.dataset.layout;
+  try { mode = localStorage.getItem("el-layout") || mode; } catch (e) { /* storage blocked */ }
   function first(mark) {
     return marks.filter(function (m) { return m.dataset.claim === mark.dataset.claim; })[0];
   }
   var firsts = marks.filter(function (m) { return first(m) === m; });
-  firsts.forEach(function (m) {
-    m.setAttribute("tabindex", "0");
-    m.setAttribute("role", "button");
-    m.setAttribute("aria-controls", "el-card");
-    m.setAttribute("aria-expanded", "false");
-  });
+  function controls(on) {
+    // Marks act as buttons only while the panel view is active.
+    firsts.forEach(function (m) {
+      if (on) {
+        m.setAttribute("tabindex", "0");
+        m.setAttribute("role", "button");
+        m.setAttribute("aria-controls", "el-card");
+        m.setAttribute("aria-expanded", "false");
+      } else {
+        ["tabindex", "role", "aria-controls", "aria-expanded"].forEach(function (a) {
+          m.removeAttribute(a);
+        });
+      }
+    });
+  }
   if (hint) hint.hidden = false;
   root.classList.add("el-js");
   function unmark() {
@@ -179,7 +211,7 @@ SCRIPT = """
     root.classList.add("el-open");
     if (scroll) {
       clicked.scrollIntoView(
-        { block: innerWidth >= 1100 ? "nearest" : "start", behavior: "smooth" });
+        { block: innerWidth >= 900 ? "nearest" : "start", behavior: "smooth" });
     }
     if (focus !== false) panel.focus({ preventScroll: true });
   }
@@ -193,11 +225,29 @@ SCRIPT = """
     root.classList.remove("el-open");
     mark.focus({ preventScroll: true });
   }
+  function setMode(m, remember) {
+    mode = m === "panel" ? "panel" : "endnotes";
+    root.classList.toggle("el-panel", mode === "panel");
+    controls(mode === "panel");
+    if (toggle) toggle.textContent = mode === "panel" ? "Show as endnotes" : "Show in side panel";
+    if (remember) {
+      try { localStorage.setItem("el-layout", mode); } catch (e) { /* storage blocked */ }
+    }
+    if (mode === "panel") return widen();
+    current = null;
+    unmark();
+    panel.hidden = true;
+    root.classList.remove("el-open");
+  }
   function step(d) {
     var i = firsts.indexOf(current);
     show(firsts[(i + d + firsts.length) % firsts.length], true);
   }
   document.addEventListener("click", function (e) {
+    if (e.target.closest(".el-toggle")) {
+      return setMode(mode === "panel" ? "endnotes" : "panel", true);
+    }
+    if (mode !== "panel") return;
     var ref = e.target.closest("sup.el-ref a");
     var mark = e.target.closest("mark.el-claim")
       || (ref && firsts.filter(function (m) {
@@ -207,13 +257,14 @@ SCRIPT = """
       // A real link inside a mark keeps its own behaviour.
       if (!ref && e.target.closest("a")) return;
       e.preventDefault();
-      return show(mark, innerWidth < 1100);
+      return show(mark, innerWidth < 900);
     }
     var button = e.target.closest("#el-card button");
     if (button) return button.dataset.el === "0" ? close() : step(+button.dataset.el);
     if (current && !e.target.closest("#el-card")) close();
   });
   document.addEventListener("keydown", function (e) {
+    if (mode !== "panel") return;
     var target = e.target;
     var mark = target.closest && target.closest("mark.el-claim");
     if (mark && target === mark && (e.key === "Enter" || e.key === " ")) {
@@ -231,16 +282,19 @@ SCRIPT = """
     }
   });
   function widen() {
-    if (wide.matches && firsts.length) show(current || firsts[0], false, false);
+    if (mode === "panel" && wide.matches && firsts.length) {
+      show(current || firsts[0], false, false);
+    }
   }
   if (wide.addEventListener) wide.addEventListener("change", widen);
   else if (wide.addListener) wide.addListener(widen);
-  widen();
+  setMode(mode, false);
 })();
 """
 
 PANEL = (
-    '<aside id="el-card" hidden tabindex="-1" role="dialog" aria-label="Evidence">'
+    '<aside id="el-card" hidden data-layout="{layout}" tabindex="-1" role="dialog" '
+    'aria-label="Evidence">'
     '<header><span class="el-panel-title"></span><span>'
     '<button type="button" data-el="-1" aria-label="Previous passage">&larr;</button> '
     '<button type="button" data-el="1" aria-label="Next passage">&rarr;</button> '
@@ -248,8 +302,10 @@ PANEL = (
     '</span></header><div class="el-panel-body"></div></aside>'
 )
 HINT = (
-    '<p class="el-hint" hidden>Click or press Enter on a highlighted passage to see its evidence; '
-    '&larr; &rarr; step through the passages.<span class="el-esc"> Esc closes the panel.</span></p>'
+    '<p class="el-hint" hidden><span class="el-howto">Click or press Enter on a highlighted '
+    "passage to see its evidence; &larr; &rarr; step through the passages."
+    '<span class="el-esc"> Esc closes the panel.</span></span>'
+    '<button type="button" class="el-toggle"></button></p>'
 )
 
 _CLASS_NAMES = {"evidence": "el-ev", "note": "el-text-note"}
@@ -666,12 +722,14 @@ def embed(
             for cid in missing
         )
     section = (
-        f'<section class="el-evidence" id="el-evidence"><h2>Evidence</h2>{"".join(parts)}</section>'
+        f'<section class="el-evidence" id="el-evidence"><h2>Evidence</h2>'
+        f"{summary.toc(groups, 'el-', 'el-')}{''.join(parts)}</section>"
     )
-    panel = layout == "panel" and bool(located)
+    # Both views are always written; `layout` picks the one a reader sees first.
+    panel = bool(located)
     style = f"<style>{STYLE}{PANEL_STYLE if panel else ''}</style>"
     if panel:
-        section += f"{PANEL}<script>{SCRIPT}</script>"
+        section += f"{PANEL.replace('{layout}', layout)}<script>{SCRIPT}</script>"
     section += summary.data_script(records, level)
     body = _wrap_body(body, HINT if panel else "", section)
     return _inject(_utf8(body), style), located, missing, overlapping

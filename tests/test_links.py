@@ -361,3 +361,41 @@ def test_relink_marks_real_tags_not_tag_like_script_text(path: str, folder: Path
     html = Path(links.relink_html(str(original), str(folder))["path"]).read_text("utf-8")
     assert script in html
     assert "<title>[Private] " in html and 'class="el-private"' in html
+
+
+SMITH_BIB = "@article{exampleStudy2026,\n  author = {Smith, Ann},\n  year = 2026\n}\n"
+
+
+@pytest.mark.parametrize(
+    "name", ["Smith 2026.pdf", "smith_2026_ledgers.pdf", "2026-Smith.pdf", "Smith et al 2026.pdf"]
+)
+def test_pdf_named_after_author_and_year(path: str, folder: Path, name: str) -> None:
+    add(path, doi=None, url="https://example.org/study")
+    (folder / name).write_bytes(make_pdf(["Results", QUOTE]))
+    bib = folder.parent / "refs.bib"
+    bib.write_text(SMITH_BIB, "utf-8")
+    assert resolve(path, folder)["source_not_found"] == ["R-0001"]
+    assert resolve(path, folder, bibliography=str(bib))["found"] == ["R-0001"]
+
+
+def test_author_year_from_csl_json(path: str, folder: Path) -> None:
+    add(path, doi=None, url="https://example.org/study")
+    (folder / "van der Berg (2026).pdf").write_bytes(make_pdf(["Results", QUOTE]))
+    csl = folder.parent / "refs.json"
+    item = {
+        "id": "exampleStudy2026",
+        "author": [{"family": "van der Berg", "given": "Ann"}],
+        "issued": {"date-parts": [[2026, 3]]},
+    }
+    csl.write_text(json.dumps([item]), "utf-8")
+    assert resolve(path, folder, bibliography=str(csl))["found"] == ["R-0001"]
+
+
+@pytest.mark.parametrize("names", [["Smith 2026a.pdf", "Smith 2026b.pdf"], ["Smith 20260.pdf"]])
+def test_author_year_needs_one_exact_match(path: str, folder: Path, names: list[str]) -> None:
+    add(path, doi=None, url="https://example.org/study")
+    for name in names:
+        (folder / name).write_bytes(make_pdf(["Results", QUOTE]))
+    bib = folder.parent / "refs.bib"
+    bib.write_text(SMITH_BIB, "utf-8")
+    assert resolve(path, folder, bibliography=str(bib))["source_not_found"] == ["R-0001"]

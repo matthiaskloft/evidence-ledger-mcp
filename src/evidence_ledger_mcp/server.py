@@ -184,7 +184,8 @@ def resolve_links(
     (from `bibliography`, a .bib or CSL JSON file, which can also supply DOI and ISBN; titles
     under 20 letters and digits count only with the first author's family name), each only if
     exactly one PDF matches, so that a PDF citing the source does not; last, a file named after
-    its `key`. Each record is then
+    its `key`, or else one named after the first author and year (e.g. `Ioannidis 2005.pdf`).
+    Each record is then
     `found` (its passage is in the PDF, at the page given in the link file; this confirms the
     record independently), `passage_not_found`, `source_not_found`, or `not_searchable`: finding a
     passage needs its quote, whole or masked to its first and last words as in `masked` exports;

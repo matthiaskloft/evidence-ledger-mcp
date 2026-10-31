@@ -111,10 +111,21 @@ def bibliography(path: str) -> dict[str, dict[str, str]]:
                 if isinstance(item.get("author"), list)
                 else {}
             ),
+            **({"year": year} if (year := _csl_year(item.get("issued"))) else {}),
         }
         for item in items
         if isinstance(item, dict) and isinstance(item.get("id"), str | int)
     }
+
+
+def _csl_year(issued: Any) -> str:
+    """The year of a CSL JSON date, from `date-parts` or a `raw` date."""
+    if not isinstance(issued, dict):
+        return ""
+    parts = issued.get("date-parts")
+    if isinstance(parts, list) and parts and isinstance(parts[0], list) and parts[0]:
+        return str(parts[0][0])
+    return str(issued.get("raw", ""))
 
 
 def _csl_names(names: list[Any]) -> str:

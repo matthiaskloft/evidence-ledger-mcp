@@ -105,6 +105,22 @@ def _title(value: str, author: str) -> str:
     return f"{title}\t{author}" if title and author else ""
 
 
+def _year(entry: dict[str, str]) -> str:
+    """The publication year of a bibliography entry, from BibTeX `year` or `date`, or CSL JSON
+    `issued`."""
+    found = re.search(r"\d{4}", entry.get("year") or entry.get("date") or "")
+    return found.group(0) if found else ""
+
+
+def _author_year(stem: str, family: str, year: str) -> bool:
+    """Whether a file name holds the family name and the year, as in `Ioannidis 2005`,
+    `ioannidis_2005_why-most` or `2005-Ioannidis`; the name may span words (`van der Berg`)."""
+    if not family or not year or not re.search(rf"(?<!\d){year}(?!\d)", stem):
+        return False
+    words = [ledger.normalize(w) for w in re.findall(r"[^\W\d_]+", stem)]
+    return any("".join(words[i:]).startswith(family) for i in range(len(words)))
+
+
 def _doi_text(text: str) -> str:
     """Front matter for DOI matching, twice: with line breaks as spaces, and with them removed,
     so that a DOI wrapped across lines is found too."""
@@ -137,9 +153,10 @@ def _match(
     key: str, records: list[ledger.Record], entry: dict[str, str], library: _Library
 ) -> Path | None:
     """The PDF of a source, by the first of: its DOI on the PDF's first pages, its ISBN on the
-    front matter, its title on the first pages, or a file named after its key. A DOI or title
-    must match one PDF only; DOIs and titles are looked for on the first pages, so that a PDF
-    merely citing the source in its references does not match."""
+    front matter, its title on the first pages, a file named after its key, or a file named
+    after its first author and year. Each must match one PDF only; DOIs and titles are looked
+    for on the first pages, so that a PDF merely citing the source in its references does not
+    match."""
     dois, isbns, title = _identifiers(records, entry)
     for kind, needles in enumerate((dois, isbns, {title} - {""})):
         hits = (
@@ -163,7 +180,17 @@ def _match(
         for file in library.files
         if file.stem.casefold() == key.casefold() and library.read(file) is not None
     ]
-    return named[0] if len(named) == 1 else None  # several, e.g. two editions: none is safe
+    if len(named) == 1:
+        return named[0]
+    if named:
+        return None  # several, e.g. two editions: none is safe
+    family, year = _first_author(entry.get("author", "")), _year(entry)
+    named = [
+        file
+        for file in library.files
+        if _author_year(file.stem, family, year) and library.read(file) is not None
+    ]
+    return named[0] if len(named) == 1 else None  # two papers of one author and year: neither
 
 
 def _occurrences(text: str, piece: str) -> list[int]:

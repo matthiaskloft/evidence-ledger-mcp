@@ -138,7 +138,8 @@ def test_panel_layout(path: str) -> None:
     assert html.index('id="el-evidence"') < html.index('id="el-card"') < html.index("</body>")
     assert 'href="#el-back-C-0001">&#8617; back to text' in html
     assert '<p class="el-hint" hidden>' in html and html.count("<script>") == 1
-    assert "html.el-panel { padding-right: min(400px, 32vw); }" in html and "@media print" in html
+    assert "html.el-panel { padding-right: clamp(300px, 36vw, 420px); }" in html
+    assert "@media print" in html
     assert "el-el-" not in html
 
 

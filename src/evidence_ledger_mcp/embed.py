@@ -138,12 +138,13 @@ html.el-open body { padding-bottom: 70vh; }
   html.el-panel .el-evidence > .el-toc, html.el-panel .el-evidence:not(:has(h3)) {
     display: none; }
 }
-@media (min-width: 1100px) {
-  html.el-panel { padding-right: min(400px, 32vw); }
+@media (min-width: 900px) {
+  html.el-panel { padding-right: clamp(300px, 36vw, 420px); }
   html.el-open body { padding-bottom: 0; }
   .el-esc { display: none; }
-  #el-card { left: auto; top: 0; bottom: 0; right: 0; width: min(400px, 32vw); max-height: none;
-    border: 0; border-left: 1px solid var(--el-line); border-radius: 0; box-shadow: none;
+  #el-card { left: auto; top: 0; bottom: 0; right: 0; width: clamp(300px, 36vw, 420px);
+    max-height: none; border: 0; border-left: 1px solid var(--el-line); border-radius: 0;
+    box-shadow: none;
     padding: 1rem; }
   #el-card button[data-el="0"] { display: none; }
 }
@@ -159,7 +160,7 @@ SCRIPT = """
   var hint = document.querySelector(".el-hint");
   var root = document.documentElement;
   var current = null;
-  var wide = matchMedia("(min-width: 1100px)");
+  var wide = matchMedia("(min-width: 900px)");
   var toggle = document.querySelector(".el-toggle");
   var mode = panel.dataset.layout;
   try { mode = localStorage.getItem("el-layout") || mode; } catch (e) { /* storage blocked */ }
@@ -201,7 +202,7 @@ SCRIPT = """
     root.classList.add("el-open");
     if (scroll) {
       clicked.scrollIntoView(
-        { block: innerWidth >= 1100 ? "nearest" : "start", behavior: "smooth" });
+        { block: innerWidth >= 900 ? "nearest" : "start", behavior: "smooth" });
     }
     if (focus !== false) panel.focus({ preventScroll: true });
   }
@@ -246,7 +247,7 @@ SCRIPT = """
       // A real link inside a mark keeps its own behaviour.
       if (!ref && e.target.closest("a")) return;
       e.preventDefault();
-      return show(mark, innerWidth < 1100);
+      return show(mark, innerWidth < 900);
     }
     var button = e.target.closest("#el-card button");
     if (button) return button.dataset.el === "0" ? close() : step(+button.dataset.el);

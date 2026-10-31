@@ -7,7 +7,7 @@ from typing import Any, Literal
 
 from mcp.server.fastmcp import FastMCP
 
-from evidence_ledger_mcp import checks, embed, export, ledger, summary
+from evidence_ledger_mcp import checks, embed, export, ledger, links, summary
 from evidence_ledger_mcp.schema import record_errors, schema_version
 
 mcp = FastMCP(
@@ -164,6 +164,24 @@ def check_ledger(
     return checks.check_ledger(
         path, work, revision, bibliography, sources, include_withdrawn, source_urls
     )
+
+
+@mcp.tool()
+def resolve_links(
+    path: str, folder: str, link_file: str, include_withdrawn: bool = False
+) -> Record:
+    """Resolve the ledger's sources against the reader's own PDFs in `folder` (searched
+    recursively) and write the result to `link_file` (.json, overwritten), which stays on this
+    computer: do not share it. A source matches the PDF named after its `key` (e.g.
+    `smith2020.pdf`), or else the first PDF whose text holds its DOI or ISBN. Each record is then
+    `found` (its passage is in the PDF, at the page given in the link file; this confirms the
+    record independently), `passage_not_found`, `source_not_found`, or `not_searchable`: finding a
+    passage needs its quote, whole or masked to its first and last words as in `masked` exports;
+    a `locator` export holds only the hash. The passage must hash to `quote_hash`, so
+    whitespace, punctuation and case may differ, but hyphenation across PDF lines can make it
+    `passage_not_found`. PDFs that cannot be read are listed with a short reason under
+    `unreadable_files`. The result holds record ids and file paths, never source text."""
+    return links.resolve_links(path, folder, link_file, include_withdrawn)
 
 
 def main() -> None:

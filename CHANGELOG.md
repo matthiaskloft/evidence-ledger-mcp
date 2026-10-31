@@ -4,6 +4,10 @@ Changes to the MCP server package `evidence-ledger-mcp`. Schema changes are rele
 
 ## [Unreleased]
 
+### Fixed
+
+- The server instructions no longer repeat the fragment "server's working directory." after the source-text paragraph (#44).
+
 ## [0.3.0] - 2026-10-31
 
 ### Fixed

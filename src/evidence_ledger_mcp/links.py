@@ -15,6 +15,7 @@ from evidence_ledger_mcp import checks, fetch, ledger
 
 MAX_FILES = 5000
 MAX_FILE_BYTES = 200 * 1024 * 1024
+MAX_CANDIDATES = 20000  # spans hashed per record; masked quotes with common edge words
 MAX_SPAN = 20000  # normalized characters between a quote's first and last words
 MIN_TITLE = 20  # normalized characters; shorter titles could match by chance
 FRONT_PAGES = 2
@@ -51,7 +52,7 @@ class _Library:
         for file in self.files:
             if file not in self.front and (pages := self.read(file)) is not None:
                 self.front[file] = (
-                    "\n".join(pages[:FRONT_PAGES]).casefold(),
+                    _doi_text("\n".join(pages[:FRONT_PAGES])),
                     re.sub(r"[^0-9Xx]", "", "".join(pages[:ISBN_PAGES])).upper(),
                     ledger.normalize("".join(pages[:FRONT_PAGES])),
                 )
@@ -65,6 +66,19 @@ def _title(value: str) -> str:
     return title if len(title) >= MIN_TITLE else ""
 
 
+def _doi_text(text: str) -> str:
+    """Front matter for DOI matching, twice: with line breaks as spaces, and with them removed,
+    so that a DOI wrapped across lines is found too."""
+    spaced = re.sub(r"\s+", " ", text)
+    joined = re.sub(r"\s*\n\s*", "", text)
+    return f"{spaced}\0{joined}".casefold()
+
+
+def _has_doi(doi: str, text: str) -> bool:
+    """Whether the text holds the complete DOI, not merely a longer one starting with it."""
+    return re.search(re.escape(doi) + r"(?![\w/-]|\.\w)", text) is not None
+
+
 def _identifiers(
     records: list[ledger.Record], entry: dict[str, str]
 ) -> tuple[set[str], set[str], str]:
@@ -75,7 +89,7 @@ def _identifiers(
     for name, found in (("doi", dois), ("isbn", isbns)):
         if value := entry.get(name) or entry.get(name.upper()):
             found.add(value)
-    doi_set = {d.strip().removeprefix("https://doi.org/").casefold() for d in dois}
+    doi_set = {re.sub(r"\s+", "", d).removeprefix("https://doi.org/").casefold() for d in dois}
     isbn_set = {re.sub(r"[^0-9Xx]", "", i).upper() for i in isbns} - {""}
     return doi_set, isbn_set, _title(entry.get("title", ""))
 
@@ -93,7 +107,10 @@ def _match(
             [
                 file
                 for file, front in library.fronts()
-                if any(needle in front[kind] for needle in needles)
+                if any(
+                    _has_doi(needle, front[kind]) if kind == 0 else needle in front[kind]
+                    for needle in needles
+                )
             ]
             if needles
             else []
@@ -123,8 +140,11 @@ def _find(record: ledger.Record, pages: list[str]) -> int | None | bool:
     if not isinstance(quote, str) or version not in ("sha256-n1", "sha256-n2"):
         return False
     norm = version.removeprefix("sha256-")
-    segments = quote.strip().split("…")
-    pieces = [ledger.normalize(s, norm) for s in segments]
+    whole = ledger.normalize(quote, norm)
+    if hashlib.sha256(whole.encode("utf-8")).hexdigest() == digest:
+        pieces = [whole]  # the quote as recorded; an ellipsis in it is part of the source
+    else:
+        pieces = [ledger.normalize(s, norm) for s in quote.strip().split("…")]
     if not pieces[0] or not pieces[-1]:
         return False
     normalized = [ledger.normalize(page, norm) for page in pages]
@@ -133,9 +153,13 @@ def _find(record: ledger.Record, pages: list[str]) -> int | None | bool:
     for page in normalized:
         starts.append(starts[-1] + len(page))
     ends = [pos + len(pieces[-1]) for pos in _occurrences(text, pieces[-1])]
+    budget = MAX_CANDIDATES
     for start in _occurrences(text, pieces[0]):
         first = bisect.bisect_left(ends, start + len(pieces[0]))
         last = bisect.bisect_right(ends, start + MAX_SPAN)
+        budget -= last - first
+        if budget < 0:
+            return None  # edge words too common to tell the passage apart
         for end in ends[first:last]:
             if hashlib.sha256(text[start:end].encode("utf-8")).hexdigest() == digest:
                 return bisect.bisect_right(starts, start)
@@ -159,6 +183,8 @@ def resolve_links(
         raise ValueError("link_file must end in .json")
     if target == Path(path).resolve():
         raise ValueError("link_file must not be the ledger")
+    if bibliography and target == Path(bibliography).resolve():
+        raise ValueError("link_file must not be the bibliography")
     _, all_records = ledger.read(path)
     rows = [
         (str(r.get("id", f"record {n}")), r)

@@ -280,6 +280,12 @@ def validate_ledger(path: str) -> list[str]:
         )
         problems += [f"{label}: {e}" for e in record_errors(checked)]
         problems += [f"{label}: {e}" for e in source_overlaps(record)]
+        runs = windows(record)
+        problems += [
+            f"{label}: header.{field} repeats source text"
+            for field in ("description", "notes")
+            if leaks(header.get(field), runs)
+        ]
         if level in ("masked", "locator"):
             problems += [
                 f"{label}: {e}"

@@ -337,3 +337,13 @@ def test_validate_ledger_reports_source_overlaps(path: str) -> None:
     Path(path).write_text("\n".join(lines) + "\n", "utf-8")
     problems = ledger.validate_ledger(path)
     assert any(p.startswith("R-0001: note repeats source text") for p in problems)
+
+
+def test_validate_ledger_reports_header_overlaps(path: str) -> None:
+    add(path)
+    lines = Path(path).read_text("utf-8").splitlines()
+    first = json.loads(lines[0])
+    first["ledger"]["notes"] = "Covers: " + RECORD["quote"]
+    lines[0] = json.dumps(first)
+    Path(path).write_text("\n".join(lines) + "\n", "utf-8")
+    assert "R-0001: header.notes repeats source text" in ledger.validate_ledger(path)

@@ -222,3 +222,17 @@ def test_link_file_must_not_be_the_bibliography(path: str, folder: Path) -> None
     with pytest.raises(ValueError, match="bibliography"):
         links.resolve_links(path, str(folder), str(bib), bibliography=str(bib))
     assert bib.read_text("utf-8") == "[]"
+
+
+def test_two_pdfs_named_after_the_key_match_neither(path: str, folder: Path) -> None:
+    add(path, doi=None, url="https://example.org/study")
+    pdf = make_pdf(["Results", QUOTE])
+    (folder / "exampleStudy2026.pdf").write_bytes(pdf)
+    (folder / "sub" / "exampleStudy2026.pdf").write_bytes(pdf)
+    assert resolve(path, folder)["source_not_found"] == ["R-0001"]
+
+
+def test_very_long_whole_quote_is_found() -> None:
+    quote = " ".join(f"word{n}" for n in range(5000))
+    record = {"quote": quote, "quote_hash": ledger.quote_hash(quote)}
+    assert links._find(record, ["Intro.", quote]) == 2

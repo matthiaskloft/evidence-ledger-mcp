@@ -117,10 +117,12 @@ def _match(
         )
         if len(hits) == 1:
             return hits[0]
-    for file in library.files:
-        if file.stem.casefold() == key.casefold() and library.read(file) is not None:
-            return file
-    return None
+    named = [
+        file
+        for file in library.files
+        if file.stem.casefold() == key.casefold() and library.read(file) is not None
+    ]
+    return named[0] if len(named) == 1 else None  # several, e.g. two editions: none is safe
 
 
 def _occurrences(text: str, piece: str) -> list[int]:
@@ -152,6 +154,8 @@ def _find(record: ledger.Record, pages: list[str]) -> int | None | bool:
     starts = [0]
     for page in normalized:
         starts.append(starts[-1] + len(page))
+    if len(pieces) == 1 and pieces[0] == whole and (pos := text.find(whole)) >= 0:
+        return bisect.bisect_right(starts, pos)  # a whole quote needs no span limit
     ends = [pos + len(pieces[-1]) for pos in _occurrences(text, pieces[-1])]
     budget = MAX_CANDIDATES
     for start in _occurrences(text, pieces[0]):

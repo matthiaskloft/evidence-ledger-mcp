@@ -538,10 +538,12 @@ def _copy_link(link: dict[str, Any], base: Path) -> str:
         )
     file = Path(link["file"])
     page = link.get("page")
-    note = {
-        "page_label": "passage not found, opens the cited page",
-        "page_number": "passage not searched, opens the cited page number",
-    }.get(link.get("page_from", ""), "")
+    # The status says whether the passage was searched; page_from only says where the link opens.
+    problem = {"passage_not_found": "passage not found", "not_searchable": "passage not searched"}
+    note = problem.get(link.get("status", ""), "")
+    if note:
+        opens = {"page_label": "the cited page", "page_number": "the cited page number"}
+        note += f", opens {opens.get(link.get('page_from', ''), 'the first page')}"
     title = escape(file.name) + (f", PDF page {page}" if page else "")
     href = _href(file, base, page)
     buttons = _button("el-btn", href, "Open PDF", title)

@@ -168,12 +168,21 @@ SCRIPT = """
     return marks.filter(function (m) { return m.dataset.claim === mark.dataset.claim; })[0];
   }
   var firsts = marks.filter(function (m) { return first(m) === m; });
-  firsts.forEach(function (m) {
-    m.setAttribute("tabindex", "0");
-    m.setAttribute("role", "button");
-    m.setAttribute("aria-controls", "el-card");
-    m.setAttribute("aria-expanded", "false");
-  });
+  function controls(on) {
+    // Marks act as buttons only while the panel view is active.
+    firsts.forEach(function (m) {
+      if (on) {
+        m.setAttribute("tabindex", "0");
+        m.setAttribute("role", "button");
+        m.setAttribute("aria-controls", "el-card");
+        m.setAttribute("aria-expanded", "false");
+      } else {
+        ["tabindex", "role", "aria-controls", "aria-expanded"].forEach(function (a) {
+          m.removeAttribute(a);
+        });
+      }
+    });
+  }
   if (hint) hint.hidden = false;
   root.classList.add("el-js");
   function unmark() {
@@ -219,6 +228,7 @@ SCRIPT = """
   function setMode(m, remember) {
     mode = m === "panel" ? "panel" : "endnotes";
     root.classList.toggle("el-panel", mode === "panel");
+    controls(mode === "panel");
     if (toggle) toggle.textContent = mode === "panel" ? "Show as endnotes" : "Show in side panel";
     if (remember) {
       try { localStorage.setItem("el-layout", mode); } catch (e) { /* storage blocked */ }

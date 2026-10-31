@@ -161,6 +161,7 @@ def test_both_views_and_a_switch(path: str) -> None:
     assert 'class="el-howto"' in html and "html:not(.el-panel) #el-card" in html
     script = html.split("<script>")[1]
     assert 'localStorage.getItem("el-layout")' in script and "setMode(mode, false)" in script
+    assert 'controls(mode === "panel")' in script and "m.removeAttribute(a)" in script
     _, panel = run_new(path, layout="panel")
     assert 'data-layout="panel"' in panel
 

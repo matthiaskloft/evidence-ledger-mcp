@@ -268,7 +268,7 @@ def test_cited_page_maps_through_page_labels(path: str, folder: Path) -> None:
     add(path, locator={"page": 347})
     result = links.relink_html(str(summary_html(path, folder, "locator")), str(folder))
     html = Path(result["path"]).read_text("utf-8")
-    assert "article.pdf#page=2" in html and "passage not found, opens the cited page" in html
+    assert "article.pdf#page=2" in html and "passage not searched, opens the cited page" in html
 
 
 def test_link_file_must_not_be_the_ledger(tmp_path: Path, folder: Path) -> None:
@@ -581,3 +581,25 @@ def test_relink_renders_open_in_library_with_page(path: str, folder: Path, tmp_p
             rf'href="[^"]*" title="[^"]*">{label}</a>',
             html,
         )
+
+
+def test_copy_note_follows_status_not_page_source() -> None:
+    base = Path("/tmp")
+    found = {"status": "found", "file": "/tmp/a.pdf", "page": 2, "page_from": "passage"}
+    assert "el-where" not in links._copy_link(found, base)
+    missed = {
+        "status": "passage_not_found",
+        "file": "/tmp/a.pdf",
+        "page": 2,
+        "page_from": "page_number",
+    }
+    assert "passage not found, opens the cited page number" in links._copy_link(missed, base)
+    unsearched = {
+        "status": "not_searchable",
+        "file": "/tmp/a.pdf",
+        "page": 2,
+        "page_from": "page_label",
+    }
+    assert "passage not searched, opens the cited page<" in links._copy_link(unsearched, base)
+    no_page = {"status": "passage_not_found", "file": "/tmp/a.pdf"}
+    assert "passage not found, opens the first page" in links._copy_link(no_page, base)

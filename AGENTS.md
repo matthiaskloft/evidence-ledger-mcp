@@ -7,7 +7,7 @@ These instructions apply to every coding agent working in this repository (Claud
 This repository owns the MCP server. The canonical evidence ledger schema is maintained separately in `matthiaskloft/evidence-ledger-schema`.
 
 - `schema/` contains a pinned vendored release, not the schema's development source. Do not edit its schema, licence or changelog directly. Update all three from an upstream release and record its exact revision, version, tag and file hashes in `schema/UPSTREAM.json`.
-- Update supported-schema documentation and run all checks when adopting a new schema release. Keep one schema copy in this repository; the wheel receives its copy at build time.
+- Update supported-schema documentation, including the schema badge at the top of the README, and run all checks when adopting a new schema release. Keep one schema copy in this repository; the wheel receives its copy at build time.
 - Propose schema changes in the schema repository. Original `schema-v*` tags here are historical; future schema releases belong upstream.
 
 ## Pull requests

@@ -1,14 +1,16 @@
 # evidence-ledger-mcp
 
+[![PyPI](https://img.shields.io/pypi/v/evidence-ledger-mcp)](https://pypi.org/project/evidence-ledger-mcp/)
+[![Release](https://img.shields.io/github/v/release/matthiaskloft/evidence-ledger-mcp?filter=v*&label=release)](https://github.com/matthiaskloft/evidence-ledger-mcp/releases)
+[![Schema](https://img.shields.io/badge/schema-v0.4.0-blue)](https://github.com/matthiaskloft/evidence-ledger-schema/releases/tag/schema-v0.4.0)
+
 > **Under active development.** Both the schema and the server may change in breaking ways between versions until v1.0. Pin the version you use.
 
 An [MCP](https://modelcontextprotocol.io) server through which agents keep an evidence ledger for the citations in a work: for each claim, the source that backs it, where in the source, a short quote and why the citation is needed. Co-authors, scripts or a second model can then check every citation against its source.
 
 It is built for academics: authors and co-authors who write with LLMs and want every citation to stay checkable. The ledger format is an open schema, so a graduate school could require it for theses, and a journal could adopt it for submissions or build its own standard on it.
 
-**Server: [v0.1.0 on PyPI](https://pypi.org/project/evidence-ledger-mcp/0.1.0/) · [server release](https://github.com/matthiaskloft/evidence-ledger-mcp/releases/tag/v0.1.0).**
-
-**Supported schema: [v0.4.0](https://github.com/matthiaskloft/evidence-ledger-schema/releases/tag/schema-v0.4.0) · [standalone schema repository](https://github.com/matthiaskloft/evidence-ledger-schema)** ([how schema versions are pinned](docs/schema.md)).
+**Supported schema: v0.4.0 · [standalone schema repository](https://github.com/matthiaskloft/evidence-ledger-schema)** ([how schema versions are pinned](docs/schema.md)).
 
 The MCP server and its associated documentation use the [MIT licence](LICENSE). The bundled schema uses [CC BY 4.0](schema/LICENSE), with attribution to Matthias Kloft. These licences do not cover ledger contents or third-party source material.
 

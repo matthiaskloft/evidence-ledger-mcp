@@ -18,6 +18,11 @@ BUG_REPORT_URL = (
 mcp = FastMCP(
     "evidence-ledger",
     instructions="Pass ledger paths as absolute paths; relative paths resolve against the "
+    "server's working directory. Source text goes only into the quote fields (`quote`, "
+    "`quote_prefix`, `quote_suffix`, `quote_focus`). Write every other field (`justification`, "
+    "`locator`, `note`, and the header's `description` and `notes`) in your own words, because "
+    "they are exported at every level; a run of 24 or more letters and digits from a quote there "
+    "blocks masked and locator exports, and `add_record` refuses it. "
     "server's working directory. When a tool fails or a result looks wrong (a valid record "
     "rejected, an export that fails its own validation, a check that blocks an export without "
     "a clear reason), stop and tell the user; do not work around it or edit the ledger by hand "
@@ -59,7 +64,11 @@ def create_ledger(
 def add_record(path: str, record: dict[str, Any], provenance: dict[str, Any]) -> Record:
     """Append a record. The server assigns `id`, `claim_id` (unless given), `quote_hash` and the
     provenance date, validates the result and returns the stored record. Mark the phrase
-    carrying the claim (a number, term or short statement) with optional `quote_focus`."""
+    carrying the claim (a number, term or short statement) with optional `quote_focus`. Source
+    text belongs only in `quote`, `quote_prefix`, `quote_suffix` and `quote_focus`: write
+    `justification`, `locator` (including a section heading) and `note` in your own words, since
+    they are exported with masked and locator ledgers; a record that repeats 24 or more letters
+    and digits of its own quote in another field is refused, naming the field."""
     return ledger.add_record(path, record, provenance)
 
 

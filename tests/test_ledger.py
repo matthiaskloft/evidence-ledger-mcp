@@ -260,3 +260,80 @@ def test_focus_hand_edit_is_validated(path: str) -> None:
     record["quote_focus"] = "missing"
     rewrite_line(path, 1, record)
     assert any("quote_focus" in e for e in ledger.validate_ledger(path))
+
+
+@pytest.mark.parametrize(
+    ("changes", "field"),
+    [
+        (
+            {"justification": "It says reduced unchecked citations from 40 to 3 per manuscript."},
+            "justification",
+        ),
+        (
+            {"locator": {"section": "Ledger records reduced unchecked citations from 40"}},
+            "locator.section",
+        ),
+        ({"note": "reduced unchecked citations from 40 to 3"}, "note"),
+    ],
+)
+def test_add_record_refuses_source_text_outside_quote_fields(
+    path: str, changes: dict[str, Any], field: str
+) -> None:
+    with pytest.raises(ValueError, match=f"{field} repeats source text"):
+        add(path, **changes)
+    assert ledger.read(path)[1] == []
+
+
+def test_add_record_allows_short_shared_wording_and_the_work_fields(path: str) -> None:
+    stored = add(
+        path,
+        justification="Counts of unchecked citations fell.",
+        claim="Ledger records reduced unchecked citations from 40 to 3 per manuscript",
+        anchor={"exact": "Ledger records reduced unchecked citations from 40 to 3"},
+    )
+    assert stored["id"] == "R-0001"
+
+
+def test_server_tells_agents_where_source_text_goes() -> None:
+    from evidence_ledger_mcp import server
+
+    assert "quote_focus" in (server.mcp.instructions or "")
+    assert "own words" in (server.mcp.instructions or "")
+
+
+def test_add_record_checks_header_fields(tmp_path: Path) -> None:
+    target = str(tmp_path / "h.jsonl")
+    ledger.create_ledger(target, WORK, description="Covers: " + RECORD["quote"])
+    with pytest.raises(ValueError, match=r"header\.description"):
+        ledger.add_record(target, RECORD, PROVENANCE)
+
+
+def test_prefix_suffix_focus_and_provenance_count_as_source(path: str) -> None:
+    prefix = "In the second year of the trial,"
+    suffix = "which held across every later replication"
+    with pytest.raises(ValueError, match="note repeats source text"):
+        add(path, quote_prefix=prefix, note=f"Context: {prefix}")
+    with pytest.raises(ValueError, match="note repeats source text"):
+        add(path, quote_suffix=suffix, note=suffix)
+    focus = "reduced unchecked citations from 40 to 3"
+    with pytest.raises(ValueError, match="justification repeats"):
+        add(path, quote_focus=focus, justification=f"Reads {focus}.")
+    with pytest.raises(ValueError, match=r"provenance\.by repeats"):
+        ledger.add_record(path, RECORD, {**PROVENANCE, "by": RECORD["quote"]})
+
+
+def test_window_boundary_is_24_letters_and_digits(path: str) -> None:
+    run = "abcdefghijklmnopqrstuvwx"
+    assert len(run) == ledger.WINDOW == 24
+    add(path, quote=f"Start {run} end", note=run[:23])
+    with pytest.raises(ValueError, match="note repeats source text"):
+        add(path, quote=f"Start {run} end", note=run)
+
+
+def test_validate_ledger_reports_source_overlaps(path: str) -> None:
+    add(path)
+    lines = Path(path).read_text("utf-8").splitlines()
+    lines[-1] = json.dumps({**json.loads(lines[-1]), "note": RECORD["quote"]})
+    Path(path).write_text("\n".join(lines) + "\n", "utf-8")
+    problems = ledger.validate_ledger(path)
+    assert any(p.startswith("R-0001: note repeats source text") for p in problems)

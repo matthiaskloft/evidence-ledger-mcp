@@ -5,7 +5,6 @@ from __future__ import annotations
 import copy
 import json
 import re
-from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
@@ -16,10 +15,8 @@ from evidence_ledger_mcp.schema import focus_span
 
 LEVELS = ("full", "masked", "locator")
 FORMATS = ("json", "jsonl")
-SOURCE_FIELDS = ("quote", "quote_prefix", "quote_suffix", "quote_focus")
-# Letters and digits a shared run must reach to count as copied source text.
-WINDOW = 24
-WORK_FIELDS = ("claim", "anchor")
+SOURCE_FIELDS = ledger.SOURCE_FIELDS
+WORK_FIELDS = ledger.WORK_FIELDS
 
 
 def mask_quote(quote: str, max_words: int | None = None, focus: str | None = None) -> str:
@@ -96,35 +93,6 @@ def export_level_problems(record: Record, level: str, max_words: object = None) 
     return problems
 
 
-def _strings(value: object) -> Iterator[str]:
-    if isinstance(value, str):
-        yield value
-    elif isinstance(value, dict):
-        for item in value.values():
-            yield from _strings(item)
-    elif isinstance(value, list):
-        for item in value:
-            yield from _strings(item)
-
-
-def _windows(record: Record) -> set[str]:
-    """Every WINDOW-character run of the record's normalized source text."""
-    runs: set[str] = set()
-    for field in SOURCE_FIELDS:
-        if isinstance(text := record.get(field), str):
-            norm = ledger.normalize(text)
-            runs.update(norm[i : i + WINDOW] for i in range(len(norm) - WINDOW + 1))
-    return runs
-
-
-def _leaks(value: object, windows: set[str]) -> bool:
-    for text in _strings(value):
-        norm = ledger.normalize(text)
-        if any(norm[i : i + WINDOW] in windows for i in range(len(norm) - WINDOW + 1)):
-            return True
-    return False
-
-
 def publication_problems(
     header: dict[str, Any],
     exported: list[Record],
@@ -135,7 +103,7 @@ def publication_problems(
     """Where an export at this level still contains a run of source text from any record."""
     if level == "full":
         return []
-    sources = [(str(r.get("id")), _windows(r)) for r in originals]
+    sources = [(str(r.get("id")), ledger.windows(r)) for r in originals]
     problems = []
     if level == "masked":
         by_id = {r.get("id"): r for r in originals}
@@ -168,7 +136,7 @@ def publication_problems(
         problems += [
             f"{label}: contains source text from {source}"
             for source, windows in sources
-            if _leaks(checked, windows)
+            if ledger.leaks(checked, windows)
         ]
     return problems
 

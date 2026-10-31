@@ -4,6 +4,8 @@ Changes to the MCP server package `evidence-ledger-mcp`. Schema changes are rele
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-31
+
 ### Fixed
 
 - Fetching refuses IPv6 addresses that carry a non-public IPv4 address (6to4, local-use NAT64, IPv4-compatible and Teredo forms), as it already did for IPv4-mapped and well-known NAT64 ones.

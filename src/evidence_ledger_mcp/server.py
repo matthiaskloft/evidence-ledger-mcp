@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from importlib.metadata import version
 from typing import Any, Literal
 
 from mcp.server.fastmcp import FastMCP
@@ -17,9 +18,16 @@ BUG_REPORT_URL = (
 mcp = FastMCP(
     "evidence-ledger",
     instructions="Pass ledger paths as absolute paths; relative paths resolve against the "
-    "server's working directory. To report a tool error or misleading result, suggest the "
-    "user file " + BUG_REPORT_URL + "; never file it yourself, and help them strip quotes, "
-    "source text, absolute paths and credentials unless they choose to share them.",
+    "server's working directory. When a tool fails or a result looks wrong (a valid record "
+    "rejected, an export that fails its own validation, a check that blocks an export without "
+    "a clear reason), stop and tell the user; do not work around it or edit the ledger by hand "
+    "to hide it. Suggest the user file " + BUG_REPORT_URL + "; never file it yourself, since "
+    "posting publishes to a public repository. Reproduce the problem with an invented record, "
+    "never real quotes, claims, justifications or work titles; leave out absolute paths, "
+    "usernames and credentials. Include the server version from schema_info, the tool called, "
+    "its arguments in shortened form and the exact error text. A source not found, a quote that "
+    "cannot be located or a claim the source does not support is not a server bug: record it "
+    "in the work and its ledger, not in an issue.",
 )
 
 # Mapping, not dict: FastMCP returns a dict result as is but wraps other types as {"result": ...},
@@ -29,8 +37,8 @@ Record = Mapping[str, Any]
 
 @mcp.tool()
 def schema_info() -> dict[str, str]:
-    """Report which evidence ledger schema version this server supports."""
-    return {"schema_version": schema_version()}
+    """Report the server version and the evidence ledger schema version it supports."""
+    return {"server_version": version("evidence-ledger-mcp"), "schema_version": schema_version()}
 
 
 @mcp.tool()

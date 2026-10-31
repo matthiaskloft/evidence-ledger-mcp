@@ -42,7 +42,12 @@ def test_missing_field_is_reported() -> None:
 
 
 def test_tools_wrap_the_schema_module() -> None:
-    assert schema_info() == {"schema_version": schema_version()}
+    from importlib.metadata import version
+
+    assert schema_info() == {
+        "server_version": version("evidence-ledger-mcp"),
+        "schema_version": schema_version(),
+    }
     assert validate_record(RECORD) == []
 
 

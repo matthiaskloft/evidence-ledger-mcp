@@ -5,53 +5,55 @@ body:
   - type: markdown
     attributes:
       value: |
-        Thank you for reporting this. Do not paste quotes, source or manuscript text, absolute paths, credentials or tokens. Describe the problem in your own words and replace anything private with a placeholder. Agents must not file this report; they suggest it and help you remove private content.
+        Thank you for reporting this. This repository is public. Do not paste real quotes, claims, justifications, work titles or other ledger content, and leave out absolute paths, usernames, credentials and tokens. Reproduce the problem with an invented record instead. Agents must not file this report; they suggest it and help you remove private content.
+
+        A source that cannot be found, a quote that cannot be located or a claim the source does not support is not a server bug; record it in your work and its ledger.
   - type: input
     id: version
     attributes:
-      label: Server version
-      description: Output of `evidence-ledger-mcp --version` or `pip show evidence-ledger-mcp`.
+      label: Server and schema version
+      description: The result of the `schema_info` tool, which reports both.
+      placeholder: '{"server_version": "0.2.0", "schema_version": "0.4.0"}'
     validations:
       required: true
-  - type: input
-    id: schema
-    attributes:
-      label: Schema version
-      description: Result of the `schema_info` tool.
   - type: input
     id: environment
     attributes:
       label: Operating system and Python version
       placeholder: Windows 11, Python 3.12
-  - type: input
+  - type: textarea
     id: tool
     attributes:
-      label: Tool
-      description: The tool that failed or misled, for example `check_ledger`.
+      label: Tool and arguments
+      description: The tool that failed or misled and its arguments in shortened form, with paths replaced by placeholders.
+      placeholder: 'export_ledger(path="<ledger>.jsonl", out="<out>.jsonl", format="jsonl")'
     validations:
       required: true
   - type: textarea
     id: expected
     attributes:
-      label: What you expected
+      label: Expected result
     validations:
       required: true
   - type: textarea
     id: actual
     attributes:
-      label: What happened instead
-      description: The error message or the misleading result, with quotes, source text, paths and credentials removed.
+      label: Actual result
+      description: The exact error text or the misleading result, with private content replaced by placeholders.
     validations:
       required: true
   - type: textarea
-    id: steps
+    id: reproduction
     attributes:
-      label: Steps to reproduce
-      description: Prefer a tiny invented ledger over your own data.
+      label: Minimal reproduction
+      description: The smallest invented ledger or record that shows the problem. Use invented data, never your own sources.
+      render: json
+    validations:
+      required: true
   - type: checkboxes
     id: privacy
     attributes:
       label: Privacy
       options:
-        - label: I removed quotes, source text, absolute paths, credentials and tokens, or I chose to share them.
+        - label: This report contains no source text or private ledger content (quotes, claims, justifications, work titles), and no absolute paths, usernames or credentials.
           required: true

@@ -89,5 +89,15 @@ def test_server_instructions_point_to_bug_report_without_self_filing() -> None:
 
     text = mcp.instructions or ""
     assert "template=bug_report.yml" in text
-    assert "never file it yourself" in text
-    assert "absolute paths" in text
+    for phrase in (
+        "stop and tell the user",
+        "edit the ledger by hand",
+        "never file it yourself",
+        "invented record",
+        "never real quotes, claims, justifications or work titles",
+        "absolute paths, usernames and credentials",
+        "schema_info",
+        "exact error text",
+        "not a server bug",
+    ):
+        assert phrase in text

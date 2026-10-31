@@ -84,7 +84,7 @@ Pass absolute ledger paths to tools; relative paths resolve against the server's
 
 | Tool | What it does |
 | --- | --- |
-| `schema_info` | Reports the supported schema version. |
+| `schema_info` | Reports the server version and the supported schema version. |
 | `create_ledger` | Creates a JSON Lines ledger with a header; `work` needs `title` and `type`. |
 | `add_record` | Validates and appends a record; takes the record and a separate `provenance` object and returns the stored record. |
 | `get_record` | Returns one record by its ID. |

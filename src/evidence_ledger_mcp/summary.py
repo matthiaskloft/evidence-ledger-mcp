@@ -79,6 +79,20 @@ mark { background: none; color: inherit; font-style: inherit;
 .claim-part .meta div, .more .meta div { display: contents; }
 .claim-part .meta dd, .more .meta dd { color: var(--text); opacity: 0.8; min-width: 0;
   line-break: anywhere; }
+.toc { margin: 2rem 0 0; }
+.toc ul { list-style: none; margin: 0; padding: 0; }
+.toc li { display: flex; align-items: center; gap: 0.3rem; font-size: 0.85rem;
+  padding: 0.2rem 0; border-bottom: 1px solid var(--line); }
+.toc a { display: flex; gap: 0.5rem; min-width: 0; flex: 1; color: var(--text);
+  text-decoration: none; }
+.toc a:hover .toc-text { text-decoration: underline; }
+.toc-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dot { width: 0.5rem; height: 0.5rem; border-radius: 50%; flex: none; background: var(--other); }
+.dot.rel-supports { background: var(--supports); }
+.dot.rel-partially_supports { background: var(--partial); }
+.dot.rel-contrasts { background: var(--contrasts); }
+.up { float: right; font-size: 0.85rem; color: var(--muted); text-decoration: none; }
+.up:hover { text-decoration: underline; }
 .withdrawn { color: var(--contrasts); font-weight: 600; }
 @media (max-width: 40rem) {
   main { padding: 1.5rem 0.75rem 3rem; }
@@ -278,10 +292,33 @@ def _claim_parts(
     return head, f"{label}{body}"
 
 
-def _claim(claim_id: str, records: list[Record]) -> str:
-    head, evidence = _claim_parts(claim_id, records)
+def toc(groups: dict[str, list[Record]], href: str, p: str = "") -> str:
+    """A list of the claims, each a link to its card with a dot per record coloured by relation;
+    empty for fewer than two claims. `p` prefixes the class names."""
+    if len(groups) < 2:
+        return ""
+    items = ""
+    for cid, records in groups.items():
+        dots = "".join(
+            f'<span class="{p}dot {p}rel-{_e(rel)}" title="{_e(rel.replace("_", " "))}"></span>'
+            for rel in (str(r.get("relation", "")) for r in records)
+        )
+        items += (
+            f'<li><a href="#{href}{_e(cid)}"><span class="{p}id">{_e(cid)}</span>'
+            f'<span class="{p}toc-text">{_e(records[0].get("claim", ""))}</span></a>{dots}</li>'
+        )
     return (
-        f'<section class="claim"><div class="claim-part">{head}</div>'
+        f'<nav class="{p}toc" id="{p}contents" aria-label="Claims">'
+        f'<p class="{p}label">Claims</p><ul>{items}</ul></nav>'
+    )
+
+
+def _claim(claim_id: str, records: list[Record], up: bool = False) -> str:
+    head, evidence = _claim_parts(claim_id, records)
+    back = '<a class="up" href="#contents">↑ contents</a>' if up else ""
+    return (
+        f'<section class="claim" id="claim-{_e(claim_id)}">'
+        f'<div class="claim-part">{back}{head}</div>'
         f'<div class="evidence">{evidence}</div></section>'
     )
 
@@ -319,7 +356,8 @@ def render(header: dict[str, Any], records: list[Record], level: str) -> str:
             ("location", _e(work.get("location", ""))),
         ]
     )
-    claims = "".join(_claim(cid, recs) for cid, recs in groups.items())
+    contents = toc(groups, "claim-")
+    claims = "".join(_claim(cid, recs, bool(contents)) for cid, recs in groups.items())
     return (
         '<!DOCTYPE html>\n<html lang="en"><head><meta charset="utf-8">'
         '<meta name="viewport" content="width=device-width, initial-scale=1">'
@@ -327,7 +365,7 @@ def render(header: dict[str, Any], records: list[Record], level: str) -> str:
         f"<title>{title}: evidence ledger summary</title><style>{STYLE}</style></head>"
         f"<body><main><h1>{title}: evidence ledger summary</h1>{meta}"
         f"{_prose('note', 'Description', header.get('description'))}"
-        f"{_prose('note', 'Notes', header.get('notes'))}{claims}</main>"
+        f"{_prose('note', 'Notes', header.get('notes'))}{contents}{claims}</main>"
         f"{data_script(records, level)}</body>"
         "</html>\n"
     )

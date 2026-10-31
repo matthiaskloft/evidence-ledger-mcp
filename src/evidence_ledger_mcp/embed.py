@@ -81,6 +81,19 @@ sup.el-ref { font: 600 0.68em/0 system-ui, -apple-system, "Segoe UI", sans-serif
   text-underline-offset: 0.2em; border: 0; padding: 0; }
 .el-justification, .el-text-note { margin: 0.6rem 0; }
 .el-text-note { color: var(--el-muted); font-size: 0.85rem; }
+.el-toc { margin: 0 0 1.5rem; font: 16px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif; }
+.el-toc ul { list-style: none; margin: 0; padding: 0; }
+.el-toc li { display: flex; align-items: center; gap: 0.3rem; font-size: 0.85rem;
+  padding: 0.2rem 0; border-bottom: 1px solid var(--el-line); }
+.el-toc a { display: flex; gap: 0.5rem; min-width: 0; flex: 1; color: var(--el-fg);
+  text-decoration: none; }
+.el-toc a:hover .el-toc-text { text-decoration: underline; }
+.el-toc-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.el-dot { width: 0.5rem; height: 0.5rem; border-radius: 50%; flex: none;
+  background: var(--el-muted); }
+.el-dot.el-rel-supports { background: var(--el-ok); }
+.el-dot.el-rel-partially_supports { background: var(--el-part); }
+.el-dot.el-rel-contrasts { background: var(--el-bad); }
 .el-back { margin: 0; padding: 0.8rem 1.3rem 0; font-size: 0.85rem; }
 @media print {
   :root:root:root { color-scheme: light; --el-bg: #fff; --el-fg: #000; --el-muted: #444;
@@ -667,7 +680,8 @@ def embed(
             for cid in missing
         )
     section = (
-        f'<section class="el-evidence" id="el-evidence"><h2>Evidence</h2>{"".join(parts)}</section>'
+        f'<section class="el-evidence" id="el-evidence"><h2>Evidence</h2>'
+        f"{summary.toc(groups, 'el-', 'el-')}{''.join(parts)}</section>"
     )
     panel = layout == "panel" and bool(located)
     style = f"<style>{STYLE}{PANEL_STYLE if panel else ''}</style>"

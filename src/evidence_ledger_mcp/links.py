@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import quote
 
-from evidence_ledger_mcp import checks, embed, fetch, ledger
+from evidence_ledger_mcp import checks, embed, fetch, ledger, schema
 
 MAX_FILES = 5000
 MAX_FILE_BYTES = 200 * 1024 * 1024
@@ -40,6 +40,27 @@ BANNER = (
     f"{NOTICE}</div>"
 )
 NOINDEX = '<meta name="robots" content="noindex">'
+# The "Your copy" line: buttons that stand out from the text, wrapping on narrow screens.
+COPY_STYLE = """<style>
+.el-copy { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem .6rem;
+  margin: .6rem 0; font: 14px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; }
+.el-copy a.el-btn { display: inline-block; padding: .35rem .8rem; border-radius: 6px;
+  background: #1d4f91; color: #fff; text-decoration: underline; font-weight: 600;
+  border: 1px solid #1d4f91; }
+.el-copy a.el-btn.el-open { background: transparent; color: #1d4f91; }
+.el-copy a.el-btn:hover, .el-copy a.el-btn:focus-visible { background: #0f3a70; color: #fff; }
+.el-copy .el-where { opacity: .8; overflow-wrap: anywhere; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .el-copy a.el-btn { background: #8ab4e0; color: #10151c;
+    border-color: #8ab4e0; }
+  :root:not([data-theme="light"]) .el-copy a.el-btn.el-open { background: transparent;
+    color: #8ab4e0; }
+  :root:not([data-theme="light"]) .el-copy a.el-btn:hover { background: #b5d0ee; color: #10151c; }
+}
+:root[data-theme="dark"] .el-copy a.el-btn { background: #8ab4e0; color: #10151c;
+  border-color: #8ab4e0; }
+:root[data-theme="dark"] .el-copy a.el-btn.el-open { background: transparent; color: #8ab4e0; }
+</style>"""
 _DATA = re.compile(
     r'<script type="application/json" id="evidence-ledger-data">(.*?)</script>', re.DOTALL
 )
@@ -50,15 +71,18 @@ _RECORD_HEAD = re.compile(
 _TITLE = re.compile(r"<title[^>]*>", re.IGNORECASE)
 _BODY = re.compile(r"<body[^>]*>", re.IGNORECASE)
 _HEAD = re.compile(r"<head[^>]*>", re.IGNORECASE)
-STATUSES = ("found", "passage_not_found", "source_not_found", "not_searchable")
+STATUSES = ("found", "passage_not_found", "source_not_found", "not_searchable", "not_in_map")
+UNSAFE_SCHEMES = ("javascript", "data", "vbscript")
 
 
 class _Library:
     """The PDFs of a folder; each is read at most once, and only when needed."""
 
-    def __init__(self, folder: Path) -> None:
+    def __init__(self, folder: Path | None) -> None:
         self.folder = folder
-        self.files = sorted(p for p in folder.rglob("*") if p.suffix.lower() == ".pdf")
+        self.files = (
+            sorted(p for p in folder.rglob("*") if p.suffix.lower() == ".pdf") if folder else []
+        )
         if len(self.files) > MAX_FILES:
             raise ValueError(f"{folder}: more than {MAX_FILES} PDFs")
         self.pages: dict[Path, fetch.Pdf] = {}
@@ -180,11 +204,18 @@ def _match(
 def _find_pdf(
     key: str, records: list[ledger.Record], entry: dict[str, str], library: _Library
 ) -> Path | None:
-    """The PDF of a source, by the first of: its DOI on the PDF's first pages, its ISBN on the
-    front matter, its title on the first pages, a file named after its key, or a file named
-    after its first author and year. Each must match one PDF only; DOIs and titles are looked
-    for on the first pages, so that a PDF merely citing the source in its references does not
-    match."""
+    """The PDF of a source, by the first of: a file named after its key (`<key>.pdf`), its DOI
+    on the PDF's first pages, its ISBN on the front matter, its title on the first pages, or a
+    file named after its first author and year. Each must match one PDF only; DOIs and titles
+    are looked for on the first pages, so that a PDF merely citing the source in its references
+    does not match."""
+    named = [
+        file
+        for file in library.files
+        if file.stem.casefold() == key.casefold() and library.read(file) is not None
+    ]
+    if len(named) == 1:
+        return named[0]
     dois, isbns, title = _identifiers(records, entry)
     for kind, needles in enumerate((dois, isbns, {title} - {""})):
         hits = (
@@ -203,13 +234,6 @@ def _find_pdf(
         )
         if len(hits) == 1:
             return hits[0]
-    named = [
-        file
-        for file in library.files
-        if file.stem.casefold() == key.casefold() and library.read(file) is not None
-    ]
-    if len(named) == 1:
-        return named[0]
     if named:
         return None  # several, e.g. two editions: none is safe
     family, year = _first_author(entry.get("author", "")), _year(entry)
@@ -311,12 +335,45 @@ def _locator_page(record: ledger.Record, pdf: fetch.Pdf) -> tuple[int, str] | No
     return None
 
 
+def load_link_map(path: str) -> dict[str, dict[str, str]]:
+    """The `sources` of a link map file, which must end in `.private.json` and satisfy the link
+    map schema; relative `file` paths are taken relative to the map's folder."""
+    target = Path(path).resolve()
+    if not target.name.lower().endswith(PRIVATE_JSON):
+        raise ValueError(f"link_map must end in {PRIVATE_JSON}: it is private to this computer")
+    try:
+        data = json.loads(target.read_text("utf-8"))
+    except (OSError, UnicodeDecodeError) as exc:
+        raise ValueError(f"{target}: cannot be read") from exc
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"{target}: not valid JSON ({exc.msg})") from exc
+    if errors := schema.link_map_errors(data):
+        raise ValueError(f"{target}: not a valid link map: " + "; ".join(errors[:10]))
+    sources: dict[str, dict[str, str]] = {}
+    for key, entry in data["sources"].items():
+        file = Path(entry["file"])
+        item = {"file": str(file if file.is_absolute() else target.parent / file)}
+        if "open" in entry:
+            scheme = entry["open"].partition(":")[0].casefold()
+            if not entry["open"].partition(":")[1] or scheme in UNSAFE_SCHEMES:
+                raise ValueError(f"{target}: sources/{key}/open: not a safe link")
+            item["open"] = entry["open"]
+        sources[key] = item
+    return sources
+
+
 def _resolve(
-    rows: list[tuple[str, ledger.Record]], root: Path, bibliography: str | None
+    rows: list[tuple[str, ledger.Record]],
+    root: Path | None,
+    bibliography: str | None,
+    link_map: dict[str, dict[str, str]] | None = None,
 ) -> tuple[dict[str, dict[str, Any]], dict[str, Any]]:
     """Each record's link (status, file and page, with where the page came from), and the PDFs
-    that could not be read or were left unread when the time ran out."""
-    if not root.is_dir():
+    that could not be read or were left unread when the time ran out. A key in the link map
+    searches its mapped PDF only; the folder, if any, serves the other keys."""
+    if root is None and link_map is None:
+        raise ValueError("give a folder, a link_map or both")
+    if root is not None and not root.is_dir():
         raise ValueError(f"{root}: not a folder")
     by_key: dict[str, list[ledger.Record]] = {}
     for _, record in rows:
@@ -324,19 +381,29 @@ def _resolve(
             by_key.setdefault(record["key"], []).append(record)
     entries = checks.bibliography(bibliography) if bibliography else {}
     library = _Library(root)
-    files = {
-        key: _match(key, records, entries.get(key, {}), library) for key, records in by_key.items()
-    }
+    files: dict[str, Path | None] = {}
+    for skey, records in by_key.items():
+        if link_map is not None and skey in link_map:
+            mapped = Path(link_map[skey]["file"])
+            files[skey] = mapped if library.read(mapped) is not None else None
+        elif link_map is not None and root is None:
+            files[skey] = None
+        else:
+            files[skey] = _match(skey, records, entries.get(skey, {}), library)
     links: dict[str, dict[str, Any]] = {}
     for label, record in rows:
-        key = record.get("key")
-        file = files.get(key) if isinstance(key, str) else None
+        rkey = record.get("key")
+        key = rkey if isinstance(rkey, str) else None
+        file = files.get(key) if key is not None else None
         if file is None:
-            links[label] = {"status": "source_not_found"}
+            unmapped = link_map is not None and root is None and key not in link_map
+            links[label] = {"status": "not_in_map" if unmapped else "source_not_found"}
             continue
         pdf = library.pages[file]
         page = _find(record, pdf.pages)
         link: dict[str, Any] = {"file": str(file)}
+        if link_map is not None and key is not None and "open" in link_map.get(key, {}):
+            link["open"] = link_map[key]["open"]
         if isinstance(page, _Found):
             link.update(status="found", page=page.page, page_from="passage")
             if page.across_pages:
@@ -374,14 +441,15 @@ def _rows(records: list[Any], include_withdrawn: bool) -> list[tuple[str, ledger
 
 def resolve_links(
     path: str,
-    folder: str,
+    folder: str | None,
     link_file: str,
     bibliography: str | None = None,
     include_withdrawn: bool = False,
+    link_map: str | None = None,
 ) -> dict[str, Any]:
-    """Match each record's source to a PDF in `folder`, find its passage by `quote_hash`, and
-    write the result to `link_file`, whose name must mark it private; returns record ids by
-    status, never source text."""
+    """Match each record's source to a PDF in `folder` or in `link_map`, find its passage by
+    `quote_hash`, and write the result to `link_file`, whose name must mark it private; returns
+    record ids by status, never source text."""
     target = Path(link_file).resolve()
     if not target.name.lower().endswith(PRIVATE_JSON):
         raise ValueError(f"link_file must end in {PRIVATE_JSON}: it is private to this computer")
@@ -389,17 +457,21 @@ def resolve_links(
         raise ValueError("link_file must not be the ledger")
     if bibliography and target == Path(bibliography).resolve():
         raise ValueError("link_file must not be the bibliography")
-    root = Path(folder).resolve()
+    if link_map and target == Path(link_map).resolve():
+        raise ValueError("link_file must not be the link map")
+    root = Path(folder).resolve() if folder else None
+    mapped = load_link_map(link_map) if link_map else None
     _, all_records = ledger.read(path)
     rows = _rows(all_records, include_withdrawn)
-    links, files_left = _resolve(rows, root, bibliography)
+    links, files_left = _resolve(rows, root, bibliography, mapped)
     _check_overwrite(target, NOTICE)
     target.write_text(
         json.dumps(
             {
                 "private": NOTICE,
                 "ledger": str(Path(path).resolve()),
-                "folder": str(root),
+                **({"folder": str(root)} if root else {}),
+                **({"link_map": str(Path(link_map).resolve())} if link_map else {}),
                 "created": datetime.datetime.now(datetime.UTC).isoformat(timespec="seconds"),
                 "records": links,
             },
@@ -440,27 +512,53 @@ def _href(file: Path, base: Path, page: int | None) -> str:
     return f"{href}#page={page}" if page else href
 
 
+def _open_href(uri: str, page: int | None) -> str:
+    """The library link with the page appended as `page=N` (`?page=N` for Zotero)."""
+    if not page:
+        return uri
+    return f"{uri}{'&' if '?' in uri else '?'}page={page}"
+
+
+def _button(css: str, href: str, label: str) -> str:
+    """A link that opens in a new tab."""
+    return (
+        f'<a class="{css}" target="_blank" rel="noopener noreferrer" href="{escape(href)}">'
+        f"{label}</a>"
+    )
+
+
 def _copy_link(link: dict[str, Any], base: Path) -> str:
     if "file" not in link:
         return ""
     file = Path(link["file"])
     page = link.get("page")
     where = {
-        "passage": f", PDF page {page}, passage found",
-        "page_label": f", PDF page {page}, from the cited page",
-        "page_number": f", PDF page {page}, assuming the cited page number",
+        "passage": f"PDF page {page}, passage found",
+        "page_label": f"PDF page {page}, from the cited page",
+        "page_number": f"PDF page {page}, assuming the cited page number",
     }.get(link.get("page_from", ""), "")
-    href = escape(_href(file, base, page))
+    href = _href(file, base, page)
+    buttons = _button("el-btn", href, "Open PDF")
+    if link.get("open"):
+        buttons += " " + _button(
+            "el-btn el-open", _open_href(link["open"], page), "Open in library"
+        )
+    note = escape(file.name) + (f", {escape(where)}" if where else "")
     return (
-        f'<p class="el-copy"><b>Your copy:</b> <a href="{href}">{escape(file.name)}</a>'
-        f"{escape(where)}</p>"
+        f'<p class="el-copy"><b>Your copy:</b> {buttons} <span class="el-where">{note}</span></p>'
     )
 
 
-def relink_html(html: str, folder: str, bibliography: str | None = None) -> dict[str, Any]:
+def relink_html(
+    html: str,
+    folder: str | None = None,
+    bibliography: str | None = None,
+    link_map: str | None = None,
+) -> dict[str, Any]:
     """Write a private copy of a summary or embedded HTML file from this server, whose evidence
-    cards link to the reader's own PDFs in `folder`; the copy is named `<name>.private.html`,
-    next to the original, and is marked private in its title and a banner."""
+    cards link to the reader's own PDFs in `folder` or `link_map`; the copy is named
+    `<name>.private.html`, next to the original, and is marked private in its title and a
+    banner."""
     source = Path(html).resolve()
     if source.name.lower().endswith(PRIVATE_HTML):
         raise ValueError("this is already a private copy: relink the original instead")
@@ -479,7 +577,10 @@ def relink_html(html: str, folder: str, bibliography: str | None = None) -> dict
     rows = _rows(records, include_withdrawn=True)
     target = source.with_name(source.stem + PRIVATE_HTML)
     _check_overwrite(target, 'class="el-private"')
-    links, files_left = _resolve(rows, Path(folder).resolve(), bibliography)
+    mapped = load_link_map(link_map) if link_map else None
+    links, files_left = _resolve(
+        rows, Path(folder).resolve() if folder else None, bibliography, mapped
+    )
     base = target.parent
 
     def add_link(match: re.Match[str]) -> str:
@@ -495,7 +596,7 @@ def relink_html(html: str, folder: str, bibliography: str | None = None) -> dict
     else:
         text = BANNER + text
     if head := embed._first(text, _HEAD):
-        text = text[: head.end()] + NOINDEX + text[head.end() :]
+        text = text[: head.end()] + NOINDEX + COPY_STYLE + text[head.end() :]
     with open(target, "w", encoding="utf-8", newline="\n") as handle:
         handle.write(text)
     return {

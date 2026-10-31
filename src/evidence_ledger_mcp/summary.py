@@ -40,43 +40,47 @@ STYLE = """
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--text);
   font: 16px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif; }
-main { max-width: 54rem; margin: 0 auto; padding: 2rem 1rem 4rem; }
-a { color: var(--accent); }
-h1 { font-size: 1.6rem; margin: 0 0 0.5rem; }
-.id { font-weight: 600; color: var(--muted); margin-right: 0.5rem; }
-.meta { display: flex; flex-wrap: wrap; gap: 0.4rem 1.75rem; margin: 0.6rem 0;
-  font-size: 0.88rem; }
-.meta div { min-width: 7rem; }
-.meta dt { font-size: 0.68rem; font-weight: 600; text-transform: uppercase;
-  letter-spacing: 0.05em; color: var(--muted); }
+main { max-width: 70ch; margin: 0 auto; padding: 2.5rem 1rem 5rem; }
+a { color: var(--accent); text-decoration: underline; text-underline-offset: 0.15em; }
+h1 { font-size: 1.5rem; line-height: 1.3; margin: 0 0 0.75rem; }
+.id { font-weight: 600; font-size: 0.85rem; color: var(--muted); margin-right: 0.5rem; }
+.meta { display: flex; flex-wrap: wrap; gap: 0.35rem 1.5rem; margin: 0.6rem 0;
+  font-size: 0.82rem; color: var(--muted); }
+.meta div { min-width: 6rem; }
+.meta dt { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; }
 .meta dd { margin: 0; overflow-wrap: anywhere; }
-section.claim { background: var(--card); border: 1px solid var(--line); border-radius: 8px;
-  margin-top: 1.75rem; overflow: hidden; }
-.claim-part { padding: 1.1rem 1.4rem 0.6rem; }
-.evidence { border-top: 1px solid var(--line);
-  padding: 0.2rem 1.4rem 0.6rem; }
-.claim-text { font-size: 1.2rem; font-weight: 600; line-height: 1.4; margin: 0.15rem 0 0.6rem; }
-.label { font-size: 0.7rem; font-weight: 600; text-transform: uppercase;
-  letter-spacing: 0.06em; color: var(--muted); margin: 1.25rem 0 0.5rem; }
-article.record { padding: 0.9rem 0; }
-article.record + article.record { border-top: 1px solid var(--line); }
-.record-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.6rem; }
-.key { font-weight: 600; }
-.relation { font-size: 0.75rem; font-weight: 600; padding: 0.05rem 0.5rem;
-  border: 1px solid currentColor; border-radius: 999px; color: var(--other); }
+section.claim { background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+  margin-top: 2.25rem; overflow: hidden; }
+.claim-part { padding: 1.4rem 1.6rem 0.8rem; }
+.evidence { border-top: 1px solid var(--line); padding: 0.4rem 1.6rem 1.2rem; }
+.claim-text { font-size: 1.2rem; font-weight: 600; line-height: 1.45; margin: 0 0 0.8rem; }
+.label { font-size: 0.72rem; font-weight: 600; text-transform: uppercase;
+  letter-spacing: 0.06em; color: var(--muted); margin: 1.2rem 0 0.4rem; }
+article.record { padding: 1rem 0 0.4rem; }
+article.record + article.record { margin-top: 0.8rem; padding-top: 1.4rem;
+  border-top: 1px solid var(--line); }
+.record-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.2rem 0.7rem; }
+.key { font-weight: 600; overflow-wrap: anywhere; }
+.relation { font-size: 0.8rem; color: var(--other); }
 .rel-supports { color: var(--supports); }
 .rel-partially_supports { color: var(--partial); }
 .rel-contrasts { color: var(--contrasts); }
-blockquote { margin: 0.7rem 0; padding: 0.1rem 0 0.1rem 1rem;
-  border-left: 3px solid var(--line); font-family: Georgia, "Times New Roman", serif;
-  font-size: 1.02rem; font-style: italic; }
-.anchor { margin: 0 0 0.6rem; padding: 0.1rem 0 0.1rem 0.9rem; border-left: 3px solid var(--line); }
-mark { background: none; color: inherit; font-weight: 700;
+blockquote { margin: 0.8rem 0; padding: 0 0 0 1rem; border-left: 2px solid var(--line);
+  color: var(--muted); font-family: Georgia, "Times New Roman", serif; font-size: 1rem;
+  font-style: italic; line-height: 1.6; }
+.anchor { margin: 0 0 0.6rem; color: var(--muted); }
+mark { background: none; color: inherit; font-weight: 600;
   text-decoration: underline 2px var(--accent); text-underline-offset: 0.2em; }
-.justification, .note { margin: 0.5rem 0; }
-.note { color: var(--muted); }
-.provenance { margin: 0.5rem 0 0; font-size: 0.8rem; color: var(--muted); }
+.justification, .note { margin: 0.6rem 0; }
+.note { color: var(--muted); font-size: 0.9rem; }
+.more { margin-top: 0.7rem; font-size: 0.85rem; color: var(--muted); }
+.provenance { margin: 0.4rem 0 0; font-size: 0.8rem; color: var(--muted); }
 .withdrawn { color: var(--contrasts); font-weight: 600; }
+@media (max-width: 40rem) {
+  main { padding: 1.5rem 0.75rem 3rem; }
+  .claim-part { padding: 1.1rem 1rem 0.6rem; }
+  .evidence { padding: 0.3rem 1rem 1rem; }
+}
 @media print {
   :root { --bg: #fff; --card: #fff; --text: #000; --muted: #444;
     --line: #999; --accent: #000; }
@@ -193,7 +197,8 @@ def _record(record: Record, key_href: str | None = None) -> str:
     prov = _provenance(record)
     added = f'<p class="provenance">Added by {prov}</p>' if prov else ""
     rid = _e(record.get("id", ""))
-    return f'<article class="record" data-record="{rid}">{head}{gone}{body}{meta}{added}</article>'
+    more = f'<div class="more">{meta}{added}</div>' if meta or added else ""
+    return f'<article class="record" data-record="{rid}">{head}{gone}{body}{more}</article>'
 
 
 def _anchor(anchor: object) -> str:

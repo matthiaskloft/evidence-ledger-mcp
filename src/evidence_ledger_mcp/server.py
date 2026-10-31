@@ -32,7 +32,17 @@ mcp = FastMCP(
     "usernames and credentials. Include the server version from schema_info, the tool called, "
     "its arguments in shortened form and the exact error text. A source not found, a quote that "
     "cannot be located or a claim the source does not support is not a server bug: record it "
-    "in the work and its ledger, not in an issue.",
+    "in the work and its ledger, not in an issue. "
+    + "Finding the reader's PDFs (`resolve_links`, `relink_html`): put exactly the cited "
+    "PDFs in one folder, e.g. `sources/` next to the ledger, named `<citation key>.pdf`, "
+    "and pass it as `folder`; never point `folder` at a whole reference library "
+    "(thousands of PDFs: slow, and it stops at the time limit with nothing found). Keep "
+    "`sources/` out of version control (copyrighted PDFs). With a reference library, pass"
+    " `link_map` instead: a file ending `.private.json` (schema `link-map.schema.json`, "
+    "shipped in the package) mapping each citation key to its PDF `file` and optionally "
+    "an `open` link into the library. For Zotero with Better BibTeX, call JSON-RPC "
+    "`item.attachments(citekey)` at http://localhost:23119/better-bibtex/json-rpc, which "
+    "returns `{open, path}` per attachment, and write those as `open` and `file`.",
 )
 
 # Mapping, not dict: FastMCP returns a dict result as is but wraps other types as {"result": ...},
@@ -192,26 +202,40 @@ def check_ledger(
 @mcp.tool()
 def resolve_links(
     path: str,
-    folder: str,
     link_file: str,
+    folder: str | None = None,
     bibliography: str | None = None,
     include_withdrawn: bool = False,
+    link_map: str | None = None,
 ) -> Record:
-    """Resolve the ledger's sources against the reader's own PDFs in `folder` (searched
-    recursively, whatever the files are named) and write the result to `link_file`, which must
-    end in `.private.json` (a rerun replaces one this tool wrote, no other file): it holds
-    paths on this computer, so do not share it.
+    """Resolve the ledger's sources against the reader's own PDFs and write the result to
+    `link_file`, which must end in `.private.json` (a rerun replaces one this tool wrote, no
+    other file): it holds paths on this computer, so do not share it.
+    Give `folder`, `link_map` or both. Best layout: a `sources/` folder holding only the cited
+    PDFs, each named `<citation key>.pdf`, kept out of version control (copyrighted). A file
+    named exactly after the key is tried first; other names work through the matching below.
+    Do not pass a whole reference library as `folder`: thousands of PDFs are slow and the call
+    stops at the time limit with every source `source_not_found`. For a library, pass
+    `link_map` instead: the path of a `.private.json` file (JSON Schema `link-map.schema.json`)
+    with `{"link_map_version": "0.1.0", "sources": {"<key>": {"file": "<pdf path>", "open":
+    "<optional library link>"}}}`. A mapped key searches only its PDF; a key missing from the
+    map is `not_in_map`, unless `folder` is also given, which is then searched for it. With
+    Zotero and Better BibTeX, build the map from JSON-RPC `item.attachments(citekey)` at
+    http://localhost:23119/better-bibtex/json-rpc, which returns `{open, path}` per attachment.
+    `folder` is searched recursively.
     Where no passage is found, the link file still gives the PDF page of the record's
     `locator.page`, read through the PDF's printed page labels or, without labels, taken as the
-    PDF page number (`page_from` says which). A source matches by the first
-    of: its DOI on a PDF's first two pages, its ISBN on the first ten, its title on the first two
+    PDF page number (`page_from` says which). In a folder a source matches by the first
+    of: a file named `<key>.pdf`, its DOI on a PDF's first two pages, its ISBN on the first ten,
+    its title on the first two
     (from `bibliography`, a .bib or CSL JSON file, which can also supply DOI and ISBN; titles
     under 20 letters and digits count only with the first author's family name), each only if
     exactly one PDF matches, so that a PDF citing the source does not; last, a file named after
-    its `key`, or else one named after the first author and year (e.g. `Ioannidis 2005.pdf`).
+    the first author and year (e.g. `Ioannidis 2005.pdf`).
     Each record is then
     `found` (its passage is in the PDF, at the page given in the link file; this confirms the
-    record independently), `passage_not_found`, `source_not_found`, or `not_searchable`: finding a
+    record independently), `passage_not_found`, `source_not_found`, `not_in_map` or
+    `not_searchable`: finding a
     passage needs its quote, whole or masked to its first and last words as in `masked` exports;
     a `locator` export holds only the hash. The passage must hash to `quote_hash`, so
     whitespace, punctuation, case and line-end hyphens may differ; a whole quote split by a
@@ -219,15 +243,25 @@ def resolve_links(
     marked `across_pages` in the link file. PDFs that cannot be read are listed with a short
     reason under `unreadable_files`, and `time_limit` when reading PDFs stopped after 300 seconds.
     The result holds record ids and file paths, never source text."""
-    return links.resolve_links(path, folder, link_file, bibliography, include_withdrawn)
+    return links.resolve_links(path, folder, link_file, bibliography, include_withdrawn, link_map)
 
 
 @mcp.tool()
-def relink_html(html: str, folder: str, bibliography: str | None = None) -> Record:
+def relink_html(
+    html: str,
+    folder: str | None = None,
+    bibliography: str | None = None,
+    link_map: str | None = None,
+) -> Record:
     """Give a reader links from a summary or embedded HTML file (from `summarize_ledger` or
-    `embed_ledger`, e.g. one a co-author sent) to their own PDFs in `folder`. Records are read
+    `embed_ledger`, e.g. one a co-author sent) to their own PDFs in `folder` (best: a `sources/`
+    folder of only the cited PDFs named `<citation key>.pdf`, kept out of version control;
+    never a whole library) or in a `link_map` (a `.private.json` file as for `resolve_links`).
+    Records are read
     from the data the file carries, sources matched as in `resolve_links`, and each evidence card
-    gets a "Your copy" link opening the PDF at the passage's page, or else at the cited page.
+    gets a "Your copy" line with an "Open PDF" button opening the PDF at the passage's page, or else
+    at the cited page, and, where the map gives an `open` link, an "Open in library" button
+    with the page appended (`?page=N`).
     Writes `<name>.private.html` next to the original (a rerun replaces a copy it wrote, no
     other file) and never changes
     the original. The copy is marked private in its name, title and a banner, and is not indexed:
@@ -235,7 +269,7 @@ def relink_html(html: str, folder: str, bibliography: str | None = None) -> Reco
     share the original instead. Links are relative when the PDFs are inside the copy's folder
     (so a team sharing that folder can open them), absolute file:// links otherwise; they work
     when the copy is opened from disk, not from a website. Returns record ids by status."""
-    return links.relink_html(html, folder, bibliography)
+    return links.relink_html(html, folder, bibliography, link_map)
 
 
 def main() -> None:

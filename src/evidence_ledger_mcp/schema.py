@@ -26,6 +26,27 @@ def load_schema() -> dict[str, Any]:
     return schema
 
 
+LINK_MAP_SCHEMA_NAME = "link-map.schema.json"
+
+
+@cache
+def load_link_map_schema() -> dict[str, Any]:
+    """The JSON Schema of the link map, which ships inside the package."""
+    schema: dict[str, Any] = json.loads(
+        (files("evidence_ledger_mcp") / LINK_MAP_SCHEMA_NAME).read_text("utf-8")
+    )
+    return schema
+
+
+def link_map_errors(data: Any) -> list[str]:
+    """Return one message per violation of the link map schema, empty if valid."""
+    validator = Draft202012Validator(load_link_map_schema())
+    return [
+        f"{'/'.join(map(str, error.absolute_path)) or '<map>'}: {error.message}"
+        for error in sorted(validator.iter_errors(data), key=lambda e: list(e.absolute_path))
+    ]
+
+
 def schema_version() -> str:
     """The schema version, read from its `$id` (`.../schema/X.Y.Z/...`)."""
     match = re.search(r"/schema/(\d+\.\d+\.\d+)/", load_schema()["$id"])

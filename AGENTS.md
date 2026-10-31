@@ -19,7 +19,7 @@ This repository owns the MCP server. The canonical evidence ledger schema is mai
 - Python ≥ 3.11, managed with uv; source in `src/evidence_ledger_mcp/`, tests in `tests/`.
 - Before every commit: `uv run ruff check .`, `uv run ruff format --check .`, `uv run mypy` (strict) and `uv run pytest`. Do not silence a check with `# noqa` or `# type: ignore` without a comment saying why.
 - `schema/evidence-ledger.schema.json` is the only copy of the schema in the repository; the wheel gets its copy at build time. Never duplicate it under `src/`.
-- Server releases are tagged `vX.Y.Z` (see `docs/releasing.md`); never create or push a release tag without the user's approval.
+- Server releases are tagged `vX.Y.Z` (see `docs/releasing.md`); never create or push a release tag without the user's approval. Skip the TestPyPI rehearsal unless `release.yml`, the packaging or the PyPI setup changed: the tag run validates and tests before it publishes.
 
 ## Ledgers for our own citations
 

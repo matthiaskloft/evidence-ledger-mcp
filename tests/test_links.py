@@ -313,3 +313,20 @@ def test_link_file_must_not_be_the_bibliography(path: str, folder: Path) -> None
     with pytest.raises(ValueError, match="bibliography"):
         links.resolve_links(path, str(folder), str(bib), bibliography=str(bib))
     assert bib.read_text("utf-8") == "[]"
+
+
+def test_quote_split_exactly_at_a_page_break_with_a_running_head() -> None:
+    quote = "Ledger records reduced unchecked citations from 40 to 3 per manuscript"
+    record = {"quote": quote, "quote_hash": ledger.quote_hash(quote)}
+    pages = [
+        "Intro. Ledger records reduced unchecked",
+        "Journal of Examples 12 citations from 40 to 3 per manuscript.",
+    ]
+    found = links._find(record, pages)
+    assert isinstance(found, links._Found) and found.page == 1 and found.across_pages
+
+
+def test_quote_prefix_at_the_end_of_the_pdf_is_not_found() -> None:
+    quote = "Ledger records reduced unchecked citations from 40 to 3 per manuscript"
+    record = {"quote": quote, "quote_hash": ledger.quote_hash(quote)}
+    assert links._find(record, ["Intro.", "Ledger records reduced unchecked"]) is None

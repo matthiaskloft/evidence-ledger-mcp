@@ -189,8 +189,11 @@ def _across_pages(needle: str, text: str, starts: list[int]) -> int | None:
         if len(rest) < MIN_SPLIT:
             continue  # too short to tell apart from text that merely happens to follow
         gap_start = start + split
-        boundary = starts[bisect.bisect_right(starts, gap_start)]  # the next page's start
-        if text.find(rest, boundary, gap_start + MAX_GAP + len(rest)) >= 0:
+        # The first page start at or after the gap; the last entry of `starts` is the text's end.
+        page = bisect.bisect_left(starts, gap_start)
+        if page >= len(starts) - 1:
+            continue
+        if text.find(rest, starts[page], gap_start + MAX_GAP + len(rest)) >= 0:
             return start
     return None
 

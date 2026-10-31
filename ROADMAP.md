@@ -42,6 +42,8 @@ Status: drift, the quote re-check against agent-supplied or fetched text (public
 
 ### Link resolution
 
+Status: matching sources in a folder of PDFs and finding passages by `quote_hash` are implemented in `resolve_links`; Zotero and passages known only by their hash (`locator` exports) are still planned.
+
 A ledger carries only portable identifiers (DOI, ISBN, URL, title), the locator and `quote_hash`; nothing specific to one computer. Whoever opens a ledger, its author or a recipient, can resolve the links against their own library:
 
 - Match each source in a local Zotero library or a folder of PDFs, by DOI, ISBN, URL and title.

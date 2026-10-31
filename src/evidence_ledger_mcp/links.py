@@ -205,10 +205,10 @@ def _find(record: ledger.Record, pages: list[str]) -> _Found | None | bool:
     norm = version.removeprefix("sha256-")
     whole = ledger.normalize(quote, norm)
     is_whole = hashlib.sha256(whole.encode("utf-8")).hexdigest() == digest
-    if is_whole:
-        pieces = [whole]  # the quote as recorded; an ellipsis in it is part of the source
-    else:
-        pieces = [ledger.normalize(s, norm) for s in quote.strip().split("…")]
+    # A quote matching its hash whole is searched as recorded, an ellipsis in it being part of
+    # the source; otherwise "…" marks the words a masked export left out.
+    masked = [ledger.normalize(s, norm) for s in quote.strip().split("…")]
+    pieces = [whole] if is_whole else masked
     if not pieces[0] or not pieces[-1]:
         return False
     normalized = [ledger.normalize(page, norm) for page in pages]

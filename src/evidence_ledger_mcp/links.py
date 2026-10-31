@@ -43,8 +43,8 @@ NOINDEX = '<meta name="robots" content="noindex">'
 # The "Your copy" line: buttons that stand out from the text, wrapping on narrow screens.
 COPY_STYLE = """<style>
 .el-copy { display: flex; flex-wrap: wrap; align-items: center; gap: .3rem .5rem;
-  margin: .5rem 0; font: 0.85rem/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; }
-.el-copy a.el-btn { display: inline-block; padding: .05rem .5rem; border-radius: 4px;
+  margin: .6rem 0 1rem; font: 0.85rem/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; }
+.el-copy a.el-btn { display: inline-block; padding: .1rem .55rem; border-radius: 4px;
   background: #e8eef7; color: #1d4f91; border: 1px solid #9db6d8; text-decoration: none;
   font-weight: 600; font-size: inherit; }
 .el-copy a.el-btn:hover, .el-copy a.el-btn:focus-visible { background: #1d4f91; color: #fff;

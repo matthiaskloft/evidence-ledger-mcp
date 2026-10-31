@@ -66,7 +66,8 @@ sup.el-ref { font: 600 0.68em/0 system-ui, -apple-system, "Segoe UI", sans-serif
 .el-record { padding: 0.8rem 0 0.3rem; }
 .el-record + .el-record { margin-top: 0.6rem; padding-top: 1.2rem;
   border-top: 1px solid var(--el-line); }
-.el-record-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.2rem 0.7rem; }
+.el-record-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.2rem 0.7rem;
+  margin-bottom: 0.6rem; }
 .el-key { font-weight: 600; overflow-wrap: anywhere; }
 .el-relation { font-size: 0.85rem; color: var(--el-muted); }
 .el-rel-supports { color: var(--el-ok); }

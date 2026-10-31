@@ -59,7 +59,8 @@ section.claim { background: var(--card); border: 1px solid var(--line); border-r
 article.record { padding: 1rem 0 0.4rem; }
 article.record + article.record { margin-top: 0.8rem; padding-top: 1.4rem;
   border-top: 1px solid var(--line); }
-.record-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.2rem 0.7rem; }
+.record-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.2rem 0.7rem;
+  margin-bottom: 0.6rem; }
 .key { font-weight: 600; overflow-wrap: anywhere; }
 .relation { font-size: 0.85rem; color: var(--other); }
 .rel-supports { color: var(--supports); }

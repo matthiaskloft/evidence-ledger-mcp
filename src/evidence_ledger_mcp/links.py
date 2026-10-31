@@ -277,7 +277,11 @@ def _find(record: ledger.Record, pages: list[str]) -> _Found | None | bool:
     for page in normalized:
         starts.append(starts[-1] + len(page))
     if is_whole and (pos := text.find(whole)) >= 0:
-        return _Found(bisect.bisect_right(starts, pos))  # a whole quote needs no span limit
+        # A whole quote needs no span limit. It crosses a page break when it ends on a later page.
+        first_page = bisect.bisect_right(starts, pos)
+        return _Found(
+            first_page, across_pages=bisect.bisect_right(starts, pos + len(whole) - 1) > first_page
+        )
     ends = [pos + len(pieces[-1]) for pos in _occurrences(text, pieces[-1])]
     budget = MAX_CANDIDATES
     for start in _occurrences(text, pieces[0]):

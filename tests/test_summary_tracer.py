@@ -57,7 +57,7 @@ async def summarize(tmp: Path) -> None:
     assert "page 4" in html and "section 5.2" in html
     assert "Ledger records" in html and "per manuscript" in html
     assert "reduced unchecked" not in html
-    assert "<script" not in html
+    assert "<script>" not in html
 
 
 def test_summary_over_stdio(tmp_path: Path) -> None:

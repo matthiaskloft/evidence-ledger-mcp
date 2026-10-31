@@ -7,17 +7,18 @@ import functools
 import http.client
 import io
 import ipaddress
+import json
 import logging
-import multiprocessing
 import re
 import socket
 import ssl
+import subprocess
+import sys
 import threading
 import time
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
-from multiprocessing.connection import Connection
 from typing import Any
 from urllib.parse import urljoin, urlsplit
 
@@ -238,8 +239,14 @@ def _check_public(url: str) -> list[str]:
     return addresses
 
 
-def _pdf_pages(body: bytes, max_pages: int) -> list[str]:
-    """The text of each page of a PDF; hyphenation across lines is left as is."""
+@dataclass
+class Pdf:
+    pages: list[str]  # the text of each page; hyphenation across lines is left as is
+    labels: list[str]  # the printed page numbers, e.g. "347" or "xiv"; empty if the PDF has none
+
+
+def _pdf_pages(body: bytes, max_pages: int) -> Pdf:
+    """The text and page labels of a PDF."""
     try:
         reader = pypdf.PdfReader(io.BytesIO(body))
         if reader.is_encrypted and reader.decrypt("") == pypdf.PasswordType.NOT_DECRYPTED:
@@ -253,50 +260,55 @@ def _pdf_pages(body: bytes, max_pages: int) -> list[str]:
             size += len(texts[-1])
             if size > MAX_CHARS:
                 raise FetchError("pdf too long")
+        labels = list(reader.page_labels) if "/PageLabels" in reader.root_object else []
     except FetchError:
         raise
     except Exception as exc:  # malformed PDFs raise PyPdfError, ValueError, KeyError, ...
         raise FetchError("unreadable pdf") from exc
     if not any(text.strip() for text in texts):
         raise FetchError("no text in pdf")
-    return texts
+    return Pdf(texts, labels)
 
 
-def _pdf_worker(body: bytes, max_pages: int, conn: Connection) -> None:
+def _pdf_worker() -> None:
+    """Read a PDF from stdin and write `[ok, pages and labels or reason]` as JSON to stdout."""
     logging.getLogger("pypdf").setLevel(logging.ERROR)  # its warnings can quote the file
     try:
-        conn.send((True, _pdf_pages(body, max_pages)))
+        pdf = _pdf_pages(sys.stdin.buffer.read(), int(sys.argv[1]))
+        result: list[Any] = [True, [pdf.pages, pdf.labels]]
     except FetchError as exc:
-        conn.send((False, str(exc)))
+        result = [False, str(exc)]
+    sys.stdout.write(json.dumps(result))
 
 
-def pdf_pages(body: bytes) -> list[str]:
+def pdf_pages(body: bytes) -> Pdf:
     """`_pdf_pages` in a child process that is killed after PDF_TIMEOUT, since a single
-    page's extraction cannot be interrupted and hostile PDFs can take hours."""
-    context = multiprocessing.get_context("spawn")
-    receive, send = context.Pipe(duplex=False)
-    process = context.Process(target=_pdf_worker, args=(body, MAX_PAGES, send), daemon=True)
-    process.start()
-    send.close()
+    page's extraction cannot be interrupted and hostile PDFs can take hours. The child gets
+    pipes of its own: on Windows, a child inheriting the MCP server's stdin, which the server
+    is blocked reading, hangs at startup."""
     try:
-        if not receive.poll(PDF_TIMEOUT):
-            raise FetchError("pdf too slow")
-        ok, value = receive.recv()
-    except (EOFError, OSError) as exc:  # the child died, e.g. out of memory
+        run = subprocess.run(
+            [sys.executable, "-P", "-m", "evidence_ledger_mcp.fetch", str(MAX_PAGES)],
+            input=body,
+            capture_output=True,
+            timeout=PDF_TIMEOUT,
+            check=False,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise FetchError("pdf too slow") from exc
+    try:
+        ok, value = json.loads(run.stdout)
+    except ValueError as exc:  # the child died, e.g. out of memory
         raise FetchError("unreadable pdf") from exc
-    finally:
-        process.kill()
-        process.join()
-        receive.close()
     if not ok:
-        raise FetchError(value)
-    return list(value)
+        raise FetchError(str(value))
+    return Pdf(*value)
 
 
 def _text(response: Response) -> str:
     is_pdf = response.content_type in OCTET_TYPES and b"%PDF-" in response.body[:1024]
     if response.content_type in PDF_TYPES or is_pdf:
-        return "\n".join(pdf_pages(response.body))
+        return "\n".join(pdf_pages(response.body).pages)
     if response.content_type not in TEXT_TYPES:
         named = TYPE_NAME.match(response.content_type)
         raise FetchError(f"unsupported content type{f' {response.content_type}' if named else ''}")
@@ -322,3 +334,7 @@ def fetch_text(url: str) -> str:
             raise FetchError("network error")
         url = urljoin(url, response.location)
     raise FetchError("too many redirects")
+
+
+if __name__ == "__main__":  # the PDF worker, run by `pdf_pages`
+    _pdf_worker()

@@ -96,7 +96,8 @@ Pass absolute ledger paths to tools; relative paths resolve against the server's
 | `summarize_ledger` | Writes a standalone HTML summary grouped by claim to a new file. |
 | `embed_ledger` | Marks each claim in the work's rendered HTML and links it to its evidence, as end notes or in a side panel, in a new file. |
 | `check_ledger` | Reads the ledger and reports gaps, anchors missing from the work, records from another revision and quotes not found in source text you pass in or the server fetches from public URLs. Writes nothing. |
-| `resolve_links` | Matches each source to a PDF in your own folder, by DOI, ISBN or title (from your bibliography), whatever the files are named, finds the quoted passage by its hash and writes a private link file with the file and page. |
+| `resolve_links` | Matches each source to a PDF in your own folder, by DOI, ISBN or title (from your bibliography), whatever the files are named, finds the quoted passage by its hash and writes a link file named `.private.json` with the file and page. |
+| `relink_html` | Turns a summary or embedded HTML you received into a private copy (`.private.html`) whose evidence cards open your own PDFs at the passage or cited page. |
 
 ### Typical workflow
 

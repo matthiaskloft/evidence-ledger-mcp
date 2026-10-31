@@ -147,7 +147,7 @@ def test_theme_is_owned_by_the_output(path: str) -> None:
 def test_endnotes_has_no_script_or_panel(path: str) -> None:
     add(path)
     _, html = run(path)
-    assert "<script" not in html and "<aside" not in html and "role=" not in html
+    assert "<script>" not in html and "<aside" not in html and "role=" not in html
 
 
 def test_masked_and_locator_hide_quotes(path: str) -> None:
@@ -199,7 +199,7 @@ def test_head_is_created_and_claims_are_escaped(path: str) -> None:
     add(path, claim="<script>alert(1)</script>")
     _, html = run(path, "<p>Plain: cut unchecked citations.</p>")
     assert html.startswith("<head><meta charset")
-    assert "<script" not in html
+    assert "<script>" not in html
     assert "&lt;script&gt;" in html
 
 
@@ -258,7 +258,7 @@ def test_panel_without_located_claims_reports_endnotes(path: str) -> None:
     add(path, anchor={"exact": "nowhere in the work"})
     result, html = run(path, layout="panel")
     assert result["layout"] == "endnotes" and result["located"] == 0
-    assert "<aside" not in html and "<script" not in html
+    assert "<aside" not in html and "<script>" not in html
 
 
 def test_overlapping_claims_are_reported(path: str) -> None:

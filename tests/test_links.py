@@ -6,7 +6,7 @@ from typing import Any
 
 import pytest
 
-from evidence_ledger_mcp import export, ledger, links
+from evidence_ledger_mcp import export, ledger, links, summary
 
 WORK = {"title": "Example work", "type": "manuscript"}
 PROVENANCE = {"by_type": "agent", "by": "Claude Code", "model": "claude-opus-5-5"}
@@ -81,7 +81,9 @@ def add(path: str, **changes: Any) -> str:
 
 
 def resolve(path: str, folder: Path, **kwargs: Any) -> dict[str, Any]:
-    return links.resolve_links(path, str(folder), str(folder.parent / "links.json"), **kwargs)
+    return links.resolve_links(
+        path, str(folder), str(folder.parent / "links.private.json"), **kwargs
+    )
 
 
 def test_passage_found_by_doi_with_page(path: str, folder: Path) -> None:
@@ -89,11 +91,12 @@ def test_passage_found_by_doi_with_page(path: str, folder: Path) -> None:
     (folder / "sub" / "article.pdf").write_bytes(ARTICLE)
     result = resolve(path, folder)
     assert result["found"] == ["R-0001"]
-    saved = json.loads((folder.parent / "links.json").read_text("utf-8"))
+    saved = json.loads((folder.parent / "links.private.json").read_text("utf-8"))
     assert saved["records"]["R-0001"] == {
         "file": str((folder / "sub" / "article.pdf").resolve()),
         "status": "found",
         "page": 2,
+        "page_from": "passage",
     }
     assert QUOTE not in json.dumps(result)
 
@@ -143,8 +146,8 @@ def test_withdrawn_records_are_skipped(path: str, folder: Path) -> None:
 
 def test_bad_arguments(path: str, folder: Path) -> None:
     with pytest.raises(ValueError, match="not a folder"):
-        links.resolve_links(path, str(folder / "missing"), str(folder / "l.json"))
-    with pytest.raises(ValueError, match=r".json"):
+        links.resolve_links(path, str(folder / "missing"), str(folder / "l.private.json"))
+    with pytest.raises(ValueError, match="private"):
         links.resolve_links(path, str(folder), str(folder / "links.txt"))
 
 
@@ -185,6 +188,94 @@ def test_ambiguous_doi_does_not_match(path: str, folder: Path) -> None:
     assert resolve(path, folder)["source_not_found"] == ["R-0001"]
 
 
+def summary_html(path: str, folder: Path, level: str = "full") -> Path:
+    out = folder.parent / f"summary-{level}.html"
+    summary.summarize_ledger(path, str(out), level)
+    return out
+
+
+def test_relink_writes_a_private_copy_with_relative_links(path: str, folder: Path) -> None:
+    add(path)
+    (folder / "sub" / "article.pdf").write_bytes(ARTICLE)
+    original = summary_html(path, folder)
+    result = links.relink_html(str(original), str(folder))
+    copy = Path(result["path"])
+    assert copy.name == "summary-full.private.html"
+    assert result["found"] == ["R-0001"] and "Do not share" in result["notice"]
+    html = copy.read_text("utf-8")
+    assert "<title>[Private] " in html and 'class="el-private"' in html
+    assert '<meta name="robots" content="noindex">' in html
+    assert 'href="pdfs/sub/article.pdf#page=2"' in html
+    assert "passage found" in html
+    assert "Your copy" not in original.read_text("utf-8")
+
+
+def test_relink_locator_export_uses_cited_page(path: str, folder: Path) -> None:
+    add(path)
+    (folder / "article.pdf").write_bytes(ARTICLE)
+    result = links.relink_html(str(summary_html(path, folder, "locator")), str(folder))
+    assert result["not_searchable"] == ["R-0001"]
+    html = Path(result["path"]).read_text("utf-8")
+    assert "article.pdf#page=2" in html and "assuming the cited page number" in html
+
+
+def test_relink_absolute_link_outside_the_copy_folder(
+    path: str, folder: Path, tmp_path: Path
+) -> None:
+    add(path)
+    (folder / "article.pdf").write_bytes(ARTICLE)
+    elsewhere = tmp_path / "out"
+    elsewhere.mkdir()
+    original = elsewhere / "s.html"
+    summary.summarize_ledger(path, str(original))
+    html = Path(links.relink_html(str(original), str(folder))["path"]).read_text("utf-8")
+    assert (folder / "article.pdf").resolve().as_uri() + "#page=2" in html
+
+
+def test_relink_refuses_private_copies_and_html_without_data(path: str, folder: Path) -> None:
+    add(path)
+    copy = links.relink_html(str(summary_html(path, folder)), str(folder))["path"]
+    with pytest.raises(ValueError, match="already a private copy"):
+        links.relink_html(copy, str(folder))
+    plain = folder.parent / "plain.html"
+    plain.write_text("<html><body>Hi</body></html>", "utf-8")
+    with pytest.raises(ValueError, match="no ledger data"):
+        links.relink_html(str(plain), str(folder))
+
+
+def test_embedded_data_holds_only_relink_fields(path: str, folder: Path) -> None:
+    add(path, note="Private reviewer note")
+    html = summary_html(path, folder, "masked").read_text("utf-8")
+    assert "Private reviewer note" in html  # the card shows it ...
+    data = html.split('id="evidence-ledger-data">')[1].split("</script>")[0]
+    assert "Private reviewer note" not in data and "anchor" not in data  # ... the data does not
+    assert QUOTE not in data
+
+
+def test_cited_page_maps_through_page_labels(path: str, folder: Path) -> None:
+    import io
+
+    import pypdf
+
+    writer = pypdf.PdfWriter(clone_from=pypdf.PdfReader(io.BytesIO(ARTICLE)))
+    writer.set_page_label(0, 1, style=pypdf.constants.PageLabelStyle.DECIMAL, start=346)
+    buffer = io.BytesIO()
+    writer.write(buffer)
+    (folder / "article.pdf").write_bytes(buffer.getvalue())
+    add(path, locator={"page": 347})
+    result = links.relink_html(str(summary_html(path, folder, "locator")), str(folder))
+    html = Path(result["path"]).read_text("utf-8")
+    assert "article.pdf#page=2" in html and "from the cited page" in html
+
+
+def test_link_file_must_not_be_the_ledger(tmp_path: Path, folder: Path) -> None:
+    ledger_path = str(tmp_path / "ledger.private.json")
+    ledger.create_ledger(ledger_path, WORK)
+    with pytest.raises(ValueError, match="must not be the ledger"):
+        links.resolve_links(ledger_path, str(folder), ledger_path)
+    assert ledger.read(ledger_path)[0]["work"] == WORK
+
+
 def test_quote_with_leading_ellipsis_is_found_whole(path: str, folder: Path) -> None:
     add(path, quote="… " + QUOTE)
     (folder / "article.pdf").write_bytes(ARTICLE)
@@ -217,11 +308,28 @@ def test_longer_doi_does_not_match(path: str, folder: Path) -> None:
 
 
 def test_link_file_must_not_be_the_bibliography(path: str, folder: Path) -> None:
-    bib = folder.parent / "refs.json"
+    bib = folder.parent / "refs.private.json"
     bib.write_text("[]", "utf-8")
     with pytest.raises(ValueError, match="bibliography"):
         links.resolve_links(path, str(folder), str(bib), bibliography=str(bib))
     assert bib.read_text("utf-8") == "[]"
+
+
+def test_quote_split_exactly_at_a_page_break_with_a_running_head() -> None:
+    quote = "Ledger records reduced unchecked citations from 40 to 3 per manuscript"
+    record = {"quote": quote, "quote_hash": ledger.quote_hash(quote)}
+    pages = [
+        "Intro. Ledger records reduced unchecked",
+        "Journal of Examples 12 citations from 40 to 3 per manuscript.",
+    ]
+    found = links._find(record, pages)
+    assert isinstance(found, links._Found) and found.page == 1 and found.across_pages
+
+
+def test_quote_prefix_at_the_end_of_the_pdf_is_not_found() -> None:
+    quote = "Ledger records reduced unchecked citations from 40 to 3 per manuscript"
+    record = {"quote": quote, "quote_hash": ledger.quote_hash(quote)}
+    assert links._find(record, ["Intro.", "Ledger records reduced unchecked"]) is None
 
 
 def test_two_pdfs_named_after_the_key_match_neither(path: str, folder: Path) -> None:
@@ -235,9 +343,59 @@ def test_two_pdfs_named_after_the_key_match_neither(path: str, folder: Path) -> 
 def test_very_long_whole_quote_is_found() -> None:
     quote = " ".join(f"word{n}" for n in range(5000))
     record = {"quote": quote, "quote_hash": ledger.quote_hash(quote)}
-    assert links._find(record, ["Intro.", quote]) == 2
+    assert links._find(record, ["Intro.", quote]) == links._Found(2)
 
 
 def test_quote_not_matching_its_hash_is_not_found() -> None:
     record = {"quote": QUOTE, "quote_hash": ledger.quote_hash(QUOTE + " altered")}
     assert links._find(record, [QUOTE]) is None
+
+
+def test_relink_marks_real_tags_not_tag_like_script_text(path: str, folder: Path) -> None:
+    add(path)
+    (folder / "article.pdf").write_bytes(ARTICLE)
+    original = summary_html(path, folder)
+    script = '<script>const t = "<title><head><body>";</script>'
+    text = original.read_text("utf-8")
+    original.write_text(text.replace("<html", script + "<html", 1), "utf-8")
+    html = Path(links.relink_html(str(original), str(folder))["path"]).read_text("utf-8")
+    assert script in html
+    assert "<title>[Private] " in html and 'class="el-private"' in html
+
+
+SMITH_BIB = "@article{exampleStudy2026,\n  author = {Smith, Ann},\n  year = 2026\n}\n"
+
+
+@pytest.mark.parametrize(
+    "name", ["Smith 2026.pdf", "smith_2026_ledgers.pdf", "2026-Smith.pdf", "Smith et al 2026.pdf"]
+)
+def test_pdf_named_after_author_and_year(path: str, folder: Path, name: str) -> None:
+    add(path, doi=None, url="https://example.org/study")
+    (folder / name).write_bytes(make_pdf(["Results", QUOTE]))
+    bib = folder.parent / "refs.bib"
+    bib.write_text(SMITH_BIB, "utf-8")
+    assert resolve(path, folder)["source_not_found"] == ["R-0001"]
+    assert resolve(path, folder, bibliography=str(bib))["found"] == ["R-0001"]
+
+
+def test_author_year_from_csl_json(path: str, folder: Path) -> None:
+    add(path, doi=None, url="https://example.org/study")
+    (folder / "van der Berg (2026).pdf").write_bytes(make_pdf(["Results", QUOTE]))
+    csl = folder.parent / "refs.json"
+    item = {
+        "id": "exampleStudy2026",
+        "author": [{"family": "van der Berg", "given": "Ann"}],
+        "issued": {"date-parts": [[2026, 3]]},
+    }
+    csl.write_text(json.dumps([item]), "utf-8")
+    assert resolve(path, folder, bibliography=str(csl))["found"] == ["R-0001"]
+
+
+@pytest.mark.parametrize("names", [["Smith 2026a.pdf", "Smith 2026b.pdf"], ["Smith 20260.pdf"]])
+def test_author_year_needs_one_exact_match(path: str, folder: Path, names: list[str]) -> None:
+    add(path, doi=None, url="https://example.org/study")
+    for name in names:
+        (folder / name).write_bytes(make_pdf(["Results", QUOTE]))
+    bib = folder.parent / "refs.bib"
+    bib.write_text(SMITH_BIB, "utf-8")
+    assert resolve(path, folder, bibliography=str(bib))["source_not_found"] == ["R-0001"]

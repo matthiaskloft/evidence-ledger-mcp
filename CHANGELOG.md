@@ -4,6 +4,8 @@ Changes to the MCP server package `evidence-ledger-mcp`. Schema changes are rele
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-31
+
 ### Added
 
 - `resolve_links` and `relink_html` take `link_map`, the path of a `.private.json` file that maps citation keys to PDFs (and optionally to a link that opens the item in the reader's library), as an alternative or addition to `folder` (#57). The map is validated against `link-map.schema.json`, shipped in the package. Keys missing from the map are reported `not_in_map` unless `folder` is also given. Cards in a relinked copy get an "Open in library" button, with the page appended.

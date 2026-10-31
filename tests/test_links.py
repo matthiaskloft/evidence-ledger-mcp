@@ -330,3 +330,22 @@ def test_quote_prefix_at_the_end_of_the_pdf_is_not_found() -> None:
     quote = "Ledger records reduced unchecked citations from 40 to 3 per manuscript"
     record = {"quote": quote, "quote_hash": ledger.quote_hash(quote)}
     assert links._find(record, ["Intro.", "Ledger records reduced unchecked"]) is None
+
+
+def test_two_pdfs_named_after_the_key_match_neither(path: str, folder: Path) -> None:
+    add(path, doi=None, url="https://example.org/study")
+    pdf = make_pdf(["Results", QUOTE])
+    (folder / "exampleStudy2026.pdf").write_bytes(pdf)
+    (folder / "sub" / "exampleStudy2026.pdf").write_bytes(pdf)
+    assert resolve(path, folder)["source_not_found"] == ["R-0001"]
+
+
+def test_very_long_whole_quote_is_found() -> None:
+    quote = " ".join(f"word{n}" for n in range(5000))
+    record = {"quote": quote, "quote_hash": ledger.quote_hash(quote)}
+    assert links._find(record, ["Intro.", quote]) == links._Found(2)
+
+
+def test_quote_not_matching_its_hash_is_not_found() -> None:
+    record = {"quote": QUOTE, "quote_hash": ledger.quote_hash(QUOTE + " altered")}
+    assert links._find(record, [QUOTE]) is None

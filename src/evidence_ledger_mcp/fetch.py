@@ -288,7 +288,7 @@ def pdf_pages(body: bytes) -> Pdf:
     is blocked reading, hangs at startup."""
     try:
         run = subprocess.run(
-            [sys.executable, "-I", "-m", "evidence_ledger_mcp.fetch", str(MAX_PAGES)],
+            [sys.executable, "-P", "-m", "evidence_ledger_mcp.fetch", str(MAX_PAGES)],
             input=body,
             capture_output=True,
             timeout=PDF_TIMEOUT,

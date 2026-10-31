@@ -4,6 +4,10 @@ Changes to the MCP server package `evidence-ledger-mcp`. Schema changes are rele
 
 ## [Unreleased]
 
+### Fixed
+
+- `validate_ledger` reads the header `level`: it accepts the masked and locator exports `export_ledger` writes (a masked quote no longer fails the hash comparison, a locator record needs no `quote`) and reports source text a hand-edited export reintroduces (`quote`, `quote_prefix`, `quote_suffix` or `quote_focus` in a locator export, a masked quote over its word budget or another source field in a masked one). Validation cannot catch source text copied into `claim` or `justification`; the publication check at export time remains the guard.
+
 ### Added
 
 - Server instructions tell agents to stop and tell the user when a tool fails or misleads, to suggest, never file, a bug report reproduced with an invented record, and to keep workflow failures in the ledger. A bug report issue template collects the details.

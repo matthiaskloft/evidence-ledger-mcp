@@ -24,6 +24,7 @@ classifiers = [
 dependencies = [
   "mcp>=1.28,<2",
   "jsonschema>=4.23",
+  "pypdf>=6.21.4,<7",
 ]
 
 [project.optional-dependencies]

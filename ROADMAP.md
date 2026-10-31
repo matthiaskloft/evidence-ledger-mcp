@@ -34,7 +34,7 @@ Status: the HTML part is implemented (`embed_ledger`); PDF/LaTeX output is still
 
 ## 0.5: checks
 
-Status: drift, the quote re-check against agent-supplied or fetched text (public http(s) URLs, HTML or plain text) and the gap report are implemented in `check_ledger`; fetching PDFs is still planned.
+Status: drift, the quote re-check against agent-supplied or fetched text (public http(s) URLs; HTML, plain text or PDF with a text layer) and the gap report are implemented in `check_ledger`.
 
 - Check that each anchor still appears in the work, and flag records assessed against an earlier revision of it.
 - Re-check quotes against source text passed in by the agent or fetched from a public URL.

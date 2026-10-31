@@ -5,7 +5,10 @@ from __future__ import annotations
 import contextlib
 import functools
 import http.client
+import io
 import ipaddress
+import logging
+import multiprocessing
 import re
 import socket
 import ssl
@@ -14,14 +17,22 @@ import time
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
+from multiprocessing.connection import Connection
 from typing import Any
 from urllib.parse import urljoin, urlsplit
+
+import pypdf
 
 from evidence_ledger_mcp import embed
 
 TIMEOUT = 15  # seconds in total for one fetch, redirects included (DNS lookups excepted)
 MAX_BYTES = 10 * 1024 * 1024
 MAX_REDIRECTS = 5
+MAX_PAGES = 2000
+MAX_CHARS = 20 * 1024 * 1024  # of extracted PDF text
+PDF_TIMEOUT = 15  # seconds for PDF text extraction, which runs in a child process
+PDF_TYPES = ("application/pdf", "application/x-pdf")
+OCTET_TYPES = ("application/octet-stream", "binary/octet-stream")
 CHUNK = 64 * 1024
 HTML_TYPES = ("text/html", "application/xhtml+xml")
 TEXT_TYPES = (*HTML_TYPES, "text/plain")
@@ -227,7 +238,66 @@ def _check_public(url: str) -> list[str]:
     return addresses
 
 
+def _pdf_text(body: bytes, max_pages: int) -> str:
+    """The text of a PDF, pages joined by newlines; hyphenation across lines is left as is."""
+    try:
+        reader = pypdf.PdfReader(io.BytesIO(body))
+        if reader.is_encrypted and reader.decrypt("") == pypdf.PasswordType.NOT_DECRYPTED:
+            raise FetchError("encrypted pdf")
+        if len(reader.pages) > max_pages:
+            raise FetchError("pdf too long")
+        texts: list[str] = []
+        size = 0
+        for page in reader.pages:
+            texts.append(page.extract_text())
+            size += len(texts[-1])
+            if size > MAX_CHARS:
+                raise FetchError("pdf too long")
+        text = "\n".join(texts)
+    except FetchError:
+        raise
+    except Exception as exc:  # malformed PDFs raise PyPdfError, ValueError, KeyError, ...
+        raise FetchError("unreadable pdf") from exc
+    if not text.strip():
+        raise FetchError("no text in pdf")
+    return text
+
+
+def _pdf_worker(body: bytes, max_pages: int, conn: Connection) -> None:
+    logging.getLogger("pypdf").setLevel(logging.ERROR)  # its warnings can quote the file
+    try:
+        conn.send((True, _pdf_text(body, max_pages)))
+    except FetchError as exc:
+        conn.send((False, str(exc)))
+
+
+def _pdf_text_bounded(body: bytes) -> str:
+    """`_pdf_text` in a child process that is killed after PDF_TIMEOUT, since a single
+    page's extraction cannot be interrupted and hostile PDFs can take hours."""
+    context = multiprocessing.get_context("spawn")
+    receive, send = context.Pipe(duplex=False)
+    process = context.Process(target=_pdf_worker, args=(body, MAX_PAGES, send), daemon=True)
+    process.start()
+    send.close()
+    try:
+        if not receive.poll(PDF_TIMEOUT):
+            raise FetchError("pdf too slow")
+        ok, value = receive.recv()
+    except (EOFError, OSError) as exc:  # the child died, e.g. out of memory
+        raise FetchError("unreadable pdf") from exc
+    finally:
+        process.kill()
+        process.join()
+        receive.close()
+    if not ok:
+        raise FetchError(value)
+    return str(value)
+
+
 def _text(response: Response) -> str:
+    is_pdf = response.content_type in OCTET_TYPES and b"%PDF-" in response.body[:1024]
+    if response.content_type in PDF_TYPES or is_pdf:
+        return _pdf_text_bounded(response.body)
     if response.content_type not in TEXT_TYPES:
         named = TYPE_NAME.match(response.content_type)
         raise FetchError(f"unsupported content type{f' {response.content_type}' if named else ''}")

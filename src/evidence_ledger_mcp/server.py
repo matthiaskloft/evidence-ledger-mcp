@@ -182,14 +182,16 @@ def resolve_links(
     PDF page number (`page_from` says which). A source matches by the first
     of: its DOI on a PDF's first two pages, its ISBN on the first ten, its title on the first two
     (from `bibliography`, a .bib or CSL JSON file, which can also supply DOI and ISBN; titles
-    under 20 letters and digits are not used), each only if exactly one PDF matches, so that a
-    PDF citing the source does not; last, a file named after its `key`. Each record is then
+    under 20 letters and digits count only with the first author's family name), each only if
+    exactly one PDF matches, so that a PDF citing the source does not; last, a file named after
+    its `key`. Each record is then
     `found` (its passage is in the PDF, at the page given in the link file; this confirms the
     record independently), `passage_not_found`, `source_not_found`, or `not_searchable`: finding a
     passage needs its quote, whole or masked to its first and last words as in `masked` exports;
     a `locator` export holds only the hash. The passage must hash to `quote_hash`, so
-    whitespace, punctuation and case may differ, but hyphenation across PDF lines can make it
-    `passage_not_found`. PDFs that cannot be read are listed with a short reason under
+    whitespace, punctuation, case and line-end hyphens may differ; a whole quote split by a
+    page break (with running heads or captions between its parts) is found and marked
+    `across_pages` in the link file. PDFs that cannot be read are listed with a short reason under
     `unreadable_files`. The result holds record ids and file paths, never source text."""
     return links.resolve_links(path, folder, link_file, bibliography, include_withdrawn)
 

@@ -266,3 +266,11 @@ def test_cited_page_maps_through_page_labels(path: str, folder: Path) -> None:
     result = links.relink_html(str(summary_html(path, folder, "locator")), str(folder))
     html = Path(result["path"]).read_text("utf-8")
     assert "article.pdf#page=2" in html and "from the cited page" in html
+
+
+def test_link_file_must_not_be_the_ledger(tmp_path: Path, folder: Path) -> None:
+    ledger_path = str(tmp_path / "ledger.private.json")
+    ledger.create_ledger(ledger_path, WORK)
+    with pytest.raises(ValueError, match="must not be the ledger"):
+        links.resolve_links(ledger_path, str(folder), ledger_path)
+    assert ledger.read(ledger_path)[0]["work"] == WORK

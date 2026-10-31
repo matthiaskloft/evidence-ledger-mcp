@@ -11,3 +11,6 @@ release-notes.md
 .mypy_cache/
 .ruff_cache/
 .pytest_cache/
+
+# Real PDFs fetched by the network tests (not republished)
+tests/.pdf-cache/

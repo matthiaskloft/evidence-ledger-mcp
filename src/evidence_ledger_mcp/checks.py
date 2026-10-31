@@ -98,10 +98,29 @@ def bibliography(path: str) -> dict[str, dict[str, str]]:
     if not isinstance(items, list):
         raise ValueError(f"{path}: CSL JSON must be a list of items")
     return {
-        str(item["id"]): {k: v for k, v in item.items() if isinstance(v, str)}
+        str(item["id"]): {
+            **{k: v for k, v in item.items() if isinstance(v, str)},
+            **(
+                {"author": _csl_names(item["author"])}
+                if isinstance(item.get("author"), list)
+                else {}
+            ),
+        }
         for item in items
         if isinstance(item, dict) and isinstance(item.get("id"), str | int)
     }
+
+
+def _csl_names(names: list[Any]) -> str:
+    """CSL JSON names in BibTeX form, `Family, Given and ...`."""
+    return " and ".join(
+        ", ".join(str(n[part]) for part in ("family", "given") if part in n)
+        if isinstance(n, dict) and "family" in n
+        else str(n.get("literal", ""))
+        if isinstance(n, dict)
+        else ""
+        for n in names
+    )
 
 
 def bibliography_keys(path: str) -> set[str]:

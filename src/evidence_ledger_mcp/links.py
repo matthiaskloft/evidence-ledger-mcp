@@ -6,8 +6,10 @@ import bisect
 import datetime
 import hashlib
 import json
+import os
 import re
 from collections.abc import Iterator
+from dataclasses import dataclass
 from html import escape, unescape
 from pathlib import Path
 from typing import Any
@@ -18,6 +20,8 @@ from evidence_ledger_mcp import checks, fetch, ledger
 MAX_FILES = 5000
 MAX_FILE_BYTES = 200 * 1024 * 1024
 MAX_SPAN = 20000  # normalized characters between a quote's first and last words
+MAX_GAP = 8000  # normalized characters of heads, footers, captions or sidebars at a page break
+MIN_SPLIT = 12  # normalized characters each part of a quote split by a page break must have
 MIN_TITLE = 20  # normalized characters; shorter titles could match by chance
 FRONT_PAGES = 2
 ISBN_PAGES = 10
@@ -36,7 +40,10 @@ NOINDEX = '<meta name="robots" content="noindex">'
 _DATA = re.compile(
     r'<script type="application/json" id="evidence-ledger-data">(.*?)</script>', re.DOTALL
 )
-_RECORD_HEAD = re.compile(r'(<article class="record" data-record="([^"]*)">.*?</div>)', re.DOTALL)
+# A card's head, in summaries (`record`) and embedded works (`el-record`).
+_RECORD_HEAD = re.compile(
+    r'(<article class="(?:el-)?record" data-record="([^"]*)">.*?</div>)', re.DOTALL
+)
 _TITLE = re.compile(r"<title[^>]*>", re.IGNORECASE)
 _BODY = re.compile(r"<body[^>]*>", re.IGNORECASE)
 _HEAD = re.compile(r"<head[^>]*>", re.IGNORECASE)
@@ -80,10 +87,21 @@ class _Library:
                 yield file, self.front[file]
 
 
-def _title(value: str) -> str:
-    """A title normalized for matching, without LaTeX commands; empty if too short to be safe."""
+def _first_author(value: str) -> str:
+    """The normalized family name of the first BibTeX-style author: `Family, Given` or
+    `Given Family`."""
+    first = re.split(r"\s+and\s+", value.strip(), maxsplit=1)[0].strip("{} ")
+    family = first.split(",")[0] if "," in first else (first.split() or [""])[-1]
+    return ledger.normalize(re.sub(r"\\[A-Za-z]+", "", family))
+
+
+def _title(value: str, author: str) -> str:
+    """A title normalized for matching, without LaTeX commands; a short one is paired with the
+    first author's family name, and empty if there is none, as it could match by chance."""
     title = ledger.normalize(re.sub(r"\\[A-Za-z]+", "", value))
-    return title if len(title) >= MIN_TITLE else ""
+    if len(title) >= MIN_TITLE:
+        return title
+    return f"{title}\t{author}" if title and author else ""
 
 
 def _identifiers(
@@ -98,7 +116,7 @@ def _identifiers(
             found.add(value)
     doi_set = {d.strip().removeprefix("https://doi.org/").casefold() for d in dois}
     isbn_set = {re.sub(r"[^0-9Xx]", "", i).upper() for i in isbns} - {""}
-    return doi_set, isbn_set, _title(entry.get("title", ""))
+    return doi_set, isbn_set, _title(entry.get("title", ""), _first_author(entry.get("author", "")))
 
 
 def _match(
@@ -114,7 +132,7 @@ def _match(
             [
                 file
                 for file, front in library.fronts()
-                if any(needle in front[kind] for needle in needles)
+                if any(all(part in front[kind] for part in n.split("\t")) for n in needles)
             ]
             if needles
             else []
@@ -136,9 +154,31 @@ def _occurrences(text: str, piece: str) -> list[int]:
     return found
 
 
-def _find(record: ledger.Record, pages: list[str]) -> int | None | bool:
-    """The 1-based page where the passage starts, None if it is not there, or False if the
-    record cannot be searched: it needs a quote, whole or masked to its first and last words."""
+@dataclass
+class _Found:
+    page: int  # 1-based, where the passage starts
+    across_pages: bool = False
+
+
+def _across_pages(needle: str, text: str, starts: list[int]) -> int | None:
+    """Where a whole quote starts when a page break splits it: the extracted text puts running
+    heads, footers, captions or sidebars between its two parts. The gap must contain a page
+    break, so that a quote silently leaving out words within a page is not found."""
+    for start in _occurrences(text, needle[:MIN_SPLIT]):
+        split = len(os.path.commonprefix([text[start : start + len(needle)], needle]))
+        rest = needle[split:]
+        if len(rest) < MIN_SPLIT:
+            continue  # too short to tell apart from text that merely happens to follow
+        gap_start = start + split
+        boundary = starts[bisect.bisect_right(starts, gap_start)]  # the next page's start
+        if text.find(rest, boundary, gap_start + MAX_GAP + len(rest)) >= 0:
+            return start
+    return None
+
+
+def _find(record: ledger.Record, pages: list[str]) -> _Found | None | bool:
+    """Where the passage starts, None if it is not there, or False if the record cannot be
+    searched: it needs a quote, whole or masked to its first and last words."""
     quote = record.get("quote")
     version, _, digest = str(record.get("quote_hash", "")).partition(":")
     if not isinstance(quote, str) or version not in ("sha256-n1", "sha256-n2"):
@@ -159,7 +199,11 @@ def _find(record: ledger.Record, pages: list[str]) -> int | None | bool:
         last = bisect.bisect_right(ends, start + MAX_SPAN)
         for end in ends[first:last]:
             if hashlib.sha256(text[start:end].encode("utf-8")).hexdigest() == digest:
-                return bisect.bisect_right(starts, start)
+                return _Found(bisect.bisect_right(starts, start))
+    whole = len(pieces) == 1 and hashlib.sha256(pieces[0].encode("utf-8")).hexdigest() == digest
+    split = _across_pages(pieces[0], text, starts) if whole else None
+    if split is not None:
+        return _Found(bisect.bisect_right(starts, split), across_pages=True)
     return None
 
 
@@ -201,12 +245,14 @@ def _resolve(
         pdf = library.pages[file]
         page = _find(record, pdf.pages)
         link: dict[str, Any] = {"file": str(file)}
-        if page is False or page is None:
+        if isinstance(page, _Found):
+            link.update(status="found", page=page.page, page_from="passage")
+            if page.across_pages:
+                link["across_pages"] = True
+        else:
             link["status"] = "not_searchable" if page is False else "passage_not_found"
             if located := _locator_page(record, pdf):
                 link.update(page=located[0], page_from=located[1])
-        else:
-            link.update(status="found", page=page, page_from="passage")
         links[label] = link
     return links, library.unreadable
 
@@ -239,6 +285,8 @@ def resolve_links(
     target = Path(link_file).resolve()
     if not target.name.lower().endswith(PRIVATE_JSON):
         raise ValueError(f"link_file must end in {PRIVATE_JSON}: it is private to this computer")
+    if target == Path(path).resolve():
+        raise ValueError("link_file must not be the ledger")
     root = Path(folder).resolve()
     _, all_records = ledger.read(path)
     rows = _rows(all_records, include_withdrawn)

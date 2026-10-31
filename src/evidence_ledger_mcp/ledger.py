@@ -87,7 +87,8 @@ def source_overlaps(record: Record) -> list[str]:
                 end = starts[0] + WINDOW
                 while end < len(norm) and norm[end - WINDOW + 1 : end + 1] in runs:
                     end += 1
-                found.append(f"{path} repeats source text ('{norm[starts[0] : end]}')")
+                run = norm[starts[0] : end]
+                found.append(f"{path} repeats source text (letters and digits only: '{run}')")
     return found
 
 
@@ -171,7 +172,7 @@ def add_record(path: str, record: Record, provenance: dict[str, Any]) -> Record:
     for field in ("id", "withdrawn"):
         if field in record:
             raise ValueError(f"'{field}' is assigned by the server and cannot be supplied")
-    _, existing = read(path)
+    header, existing = read(path)
     new: Record = {"id": _next_number([str(r.get("id", "")) for r in existing], "R"), **record}
     new.setdefault("claim_id", _next_number([str(r.get("claim_id", "")) for r in existing], "C"))
     if "quote" in new:
@@ -181,12 +182,20 @@ def add_record(path: str, record: Record, provenance: dict[str, Any]) -> Record:
     new["provenance"] = {**provenance, "date": date.today().isoformat()}
     if errors := record_errors(new):
         raise ValueError("Invalid record: " + "; ".join(errors))
-    if overlaps := source_overlaps(new):
+    runs = windows(new)
+    overlaps = source_overlaps(new)
+    overlaps += [
+        f"header.{field} repeats source text"
+        for field in ("description", "notes")
+        if leaks(header.get(field), runs)
+    ]
+    if overlaps:
         raise ValueError(
             "Source text outside the quote fields: "
             + "; ".join(overlaps)
-            + f". Rewrite in your own words; {WINDOW} or more letters and digits of the quote "
-            "would block a masked or locator export."
+            + ". This is a rule, not a server error: rewrite the field in your own words; "
+            f"{WINDOW} or more letters and digits of the quote would block a masked or locator "
+            "export."
         )
     for other in existing:
         same_claim = other.get("claim_id") == new["claim_id"]
@@ -261,6 +270,7 @@ def validate_ledger(path: str) -> list[str]:
             continue
         label = str(record.get("id", f"line {number}"))
         problems += [f"{label}: {e}" for e in record_errors(record)]
+        problems += [f"{label}: {e}" for e in source_overlaps(record)]
         if label in seen_ids:
             problems.append(f"{label}: duplicate id (line {number})")
         seen_ids.add(label)

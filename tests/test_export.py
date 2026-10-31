@@ -121,8 +121,13 @@ def test_check_catches_prefix_in_note(path: str) -> None:
 
 def test_check_catches_header_notes(tmp_path: Path) -> None:
     target = str(tmp_path / "ledger.jsonl")
-    ledger.create_ledger(target, WORK, notes=f"See: {QUOTE}")
+    ledger.create_ledger(target, WORK)
     add(target)
+    lines = Path(target).read_text("utf-8").splitlines()
+    header = json.loads(lines[0])
+    header["ledger"]["notes"] = f"See: {QUOTE}"
+    lines[0] = json.dumps(header)
+    Path(target).write_text("\n".join(lines) + "\n", "utf-8")
     with pytest.raises(ValueError, match="header: contains source text from R-0001"):
         export.export_ledger(target, out_of(target), "masked")
 

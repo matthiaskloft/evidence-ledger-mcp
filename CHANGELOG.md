@@ -11,7 +11,7 @@ Changes to the MCP server package `evidence-ledger-mcp`. Schema changes are rele
 
 ### Changed
 
-- Source text stays in the quote fields: the server instructions and the `add_record` description say that `justification`, `locator`, `note` and the header's `description` and `notes` are written in the agent's own words, and `add_record` now refuses a record whose fields outside the quote fields (and the work's `claim` and `anchor`) repeat 24 or more letters and digits of its own `quote`, `quote_prefix`, `quote_suffix` or `quote_focus`, naming the field. The same rule already blocked masked and locator exports. The vendored schema carries no field descriptions for these; they belong upstream.
+- Source text stays in the quote fields: the server instructions and the `add_record` description say that `justification`, `locator`, `note` and the header's `description` and `notes` are written in the agent's own words, and `add_record` now refuses a record whose fields outside the quote fields (and the work's `claim` and `anchor`) repeat 24 or more letters and digits of its own `quote`, `quote_prefix`, `quote_suffix` or `quote_focus`, naming the field; the header's `description` and `notes` are checked against the new record too, and `validate_ledger` reports the same overlaps for existing records. A section heading in `locator` that repeats the quote is refused as well, consistent with the export. The same rule already blocked masked and locator exports. The vendored schema carries no field descriptions for these; they belong upstream.
 
 ## [0.2.0] - 2026-10-31
 

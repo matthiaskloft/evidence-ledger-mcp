@@ -326,6 +326,16 @@ def test_quote_split_exactly_at_a_page_break_with_a_running_head() -> None:
     assert isinstance(found, links._Found) and found.page == 1 and found.across_pages
 
 
+def test_quote_running_cleanly_across_a_page_break_is_marked() -> None:
+    quote = "Ledger records reduced unchecked citations from 40 to 3 per manuscript"
+    record = {"quote": quote, "quote_hash": ledger.quote_hash(quote)}
+    split = ["Intro. Ledger records reduced unchecked ", "citations from 40 to 3 per manuscript."]
+    found = links._find(record, split)
+    assert isinstance(found, links._Found) and found.page == 1 and found.across_pages
+    whole = links._find(record, ["Intro.", f"{quote}."])
+    assert isinstance(whole, links._Found) and whole.page == 2 and not whole.across_pages
+
+
 def test_quote_prefix_at_the_end_of_the_pdf_is_not_found() -> None:
     quote = "Ledger records reduced unchecked citations from 40 to 3 per manuscript"
     record = {"quote": quote, "quote_hash": ledger.quote_hash(quote)}

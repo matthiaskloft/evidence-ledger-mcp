@@ -4,6 +4,10 @@ Changes to the MCP server package `evidence-ledger-mcp`. Schema changes are rele
 
 ## [Unreleased]
 
+### Fixed
+
+- `resolve_links` marks a whole quote `across_pages` when it runs cleanly across a page break, not only when a running head, caption or sidebar sits between its two halves.
+
 ## [0.3.0] - 2026-10-31
 
 ### Fixed

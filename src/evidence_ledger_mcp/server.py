@@ -176,7 +176,8 @@ def resolve_links(
 ) -> Record:
     """Resolve the ledger's sources against the reader's own PDFs in `folder` (searched
     recursively, whatever the files are named) and write the result to `link_file`, which must
-    end in `.private.json` (overwritten): it holds paths on this computer, so do not share it.
+    end in `.private.json` (a rerun replaces one this tool wrote, no other file): it holds
+    paths on this computer, so do not share it.
     Where no passage is found, the link file still gives the PDF page of the record's
     `locator.page`, read through the PDF's printed page labels or, without labels, taken as the
     PDF page number (`page_from` says which). A source matches by the first
@@ -193,7 +194,8 @@ def resolve_links(
     whitespace, punctuation, case and line-end hyphens may differ; a whole quote split by a
     page break (with running heads or captions between its parts) is found and marked
     `across_pages` in the link file. PDFs that cannot be read are listed with a short reason under
-    `unreadable_files`. The result holds record ids and file paths, never source text."""
+    `unreadable_files`, and `time_limit` when reading PDFs stopped after 300 seconds. The
+    result holds record ids and file paths, never source text."""
     return links.resolve_links(path, folder, link_file, bibliography, include_withdrawn)
 
 
@@ -203,7 +205,8 @@ def relink_html(html: str, folder: str, bibliography: str | None = None) -> Reco
     `embed_ledger`, e.g. one a co-author sent) to their own PDFs in `folder`. Records are read
     from the data the file carries, sources matched as in `resolve_links`, and each evidence card
     gets a "Your copy" link opening the PDF at the passage's page, or else at the cited page.
-    Writes `<name>.private.html` next to the original (overwritten on a rerun) and never changes
+    Writes `<name>.private.html` next to the original (a rerun replaces a copy it wrote, no
+    other file) and never changes
     the original. The copy is marked private in its name, title and a banner, and is not indexed:
     tell the user it links to files on this computer and must not be shared or published; they
     share the original instead. Links are relative when the PDFs are inside the copy's folder

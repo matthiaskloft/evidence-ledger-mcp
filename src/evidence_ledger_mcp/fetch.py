@@ -39,6 +39,8 @@ HTML_TYPES = ("text/html", "application/xhtml+xml")
 TEXT_TYPES = (*HTML_TYPES, "text/plain")
 REDIRECTS = (301, 302, 303, 307, 308)
 NAT64 = ipaddress.ip_network("64:ff9b::/96")
+LOCAL_NAT64 = ipaddress.ip_network("64:ff9b:1::/48")  # RFC 8215, translates to any address
+IPV4_COMPATIBLE = ipaddress.ip_network("::/96")  # deprecated, holds an IPv4 address
 TYPE_NAME = re.compile(r"^[a-z0-9.+-]{1,40}/[a-z0-9.+-]{1,60}$")
 
 
@@ -211,9 +213,15 @@ def _response(reply: Any, max_bytes: int, deadline: float) -> Response:
 def _is_global(address: str) -> bool:
     ip = ipaddress.ip_address(address.split("%")[0])
     if isinstance(ip, ipaddress.IPv6Address):
+        if ip in LOCAL_NAT64 or ip in IPV4_COMPATIBLE:
+            return False
+        # IPv4 addresses carried inside IPv6 ones must be public too
+        embedded = [ip.ipv4_mapped, ip.sixtofour, ip.teredo[1] if ip.teredo else None]
+        if ip in NAT64:
+            embedded.append(ipaddress.IPv4Address(ip.packed[-4:]))
         if ip.ipv4_mapped is not None:
             return ip.ipv4_mapped.is_global
-        if ip in NAT64 and not ipaddress.IPv4Address(ip.packed[-4:]).is_global:
+        if any(v4 is not None and not v4.is_global for v4 in embedded):
             return False
     return ip.is_global
 

@@ -8,6 +8,7 @@ import hashlib
 import json
 import os
 import re
+import time
 from collections.abc import Iterator
 from dataclasses import dataclass
 from html import escape, unescape
@@ -19,6 +20,7 @@ from evidence_ledger_mcp import checks, embed, fetch, ledger
 
 MAX_FILES = 5000
 MAX_FILE_BYTES = 200 * 1024 * 1024
+MAX_SECONDS = 300  # reading PDFs per call; later files are left unread
 MAX_CANDIDATES = 20000  # spans hashed per record; masked quotes with common edge words
 MAX_SPAN = 20000  # normalized characters between a quote's first and last words
 MAX_GAP = 8000  # normalized characters of heads, footers, captions or sidebars at a page break
@@ -62,9 +64,14 @@ class _Library:
         self.pages: dict[Path, fetch.Pdf] = {}
         self.unreadable: dict[str, str] = {}
         self.front: dict[Path, tuple[str, str, str]] = {}
+        self.not_read: set[Path] = set()
+        self.deadline = time.monotonic() + MAX_SECONDS
 
     def read(self, file: Path) -> fetch.Pdf | None:
         if file not in self.pages and str(file) not in self.unreadable:
+            if time.monotonic() > self.deadline:
+                self.not_read.add(file)
+                return None
             try:
                 if file.stat().st_size > MAX_FILE_BYTES:
                     raise fetch.FetchError("too large")
@@ -140,6 +147,12 @@ def _has_doi(doi: str, text: str) -> bool:
     return re.search(re.escape(doi) + r"(?![\w/-]|\.\w)", text) is not None
 
 
+def _bare_doi(value: str) -> str:
+    """A DOI without spaces or a `doi:`, `https://doi.org/` or `http://dx.doi.org/` prefix."""
+    doi = re.sub(r"\s+", "", value).casefold()
+    return re.sub(r"^(?:doi:|https?://(?:dx\.)?doi\.org/)", "", doi)
+
+
 def _identifiers(
     records: list[ledger.Record], entry: dict[str, str]
 ) -> tuple[set[str], set[str], str]:
@@ -150,7 +163,7 @@ def _identifiers(
     for name, found in (("doi", dois), ("isbn", isbns)):
         if value := entry.get(name) or entry.get(name.upper()):
             found.add(value)
-    doi_set = {re.sub(r"\s+", "", d).removeprefix("https://doi.org/").casefold() for d in dois}
+    doi_set = {_bare_doi(d) for d in dois} - {""}
     isbn_set = {re.sub(r"[^0-9Xx]", "", i).upper() for i in isbns} - {""}
     return doi_set, isbn_set, _title(entry.get("title", ""), _first_author(entry.get("author", "")))
 
@@ -287,9 +300,9 @@ def _locator_page(record: ledger.Record, pdf: fetch.Pdf) -> tuple[int, str] | No
 
 def _resolve(
     rows: list[tuple[str, ledger.Record]], root: Path, bibliography: str | None
-) -> tuple[dict[str, dict[str, Any]], dict[str, str]]:
-    """Each record's link (status, file and page, with where the page came from) and the PDFs
-    that could not be read."""
+) -> tuple[dict[str, dict[str, Any]], dict[str, Any]]:
+    """Each record's link (status, file and page, with where the page came from), and the PDFs
+    that could not be read or were left unread when the time ran out."""
     if not root.is_dir():
         raise ValueError(f"{root}: not a folder")
     by_key: dict[str, list[ledger.Record]] = {}
@@ -320,7 +333,15 @@ def _resolve(
             if located := _locator_page(record, pdf):
                 link.update(page=located[0], page_from=located[1])
         links[label] = link
-    return links, library.unreadable
+    files_left: dict[str, Any] = {"unreadable_files": library.unreadable}
+    if library.not_read:
+        files_left["time_limit"] = {
+            "seconds": MAX_SECONDS,
+            "files_not_read": len(library.not_read),
+            "note": "Some PDFs were not read, so their sources may show as source_not_found;"
+            " a smaller folder finishes in time.",
+        }
+    return links, files_left
 
 
 def _summary(links: dict[str, dict[str, Any]]) -> dict[str, Any]:
@@ -358,7 +379,8 @@ def resolve_links(
     root = Path(folder).resolve()
     _, all_records = ledger.read(path)
     rows = _rows(all_records, include_withdrawn)
-    links, unreadable = _resolve(rows, root, bibliography)
+    links, files_left = _resolve(rows, root, bibliography)
+    _check_overwrite(target, NOTICE)
     target.write_text(
         json.dumps(
             {
@@ -379,8 +401,20 @@ def resolve_links(
         "link_file": str(target),
         "notice": NOTICE,
         **_summary(links),
-        "unreadable_files": unreadable,
+        **files_left,
     }
+
+
+def _check_overwrite(target: Path, marker: str) -> None:
+    """Refuse to replace a file these tools did not write."""
+    try:
+        existing = target.read_text("utf-8", errors="replace")
+    except FileNotFoundError:
+        return
+    except OSError as exc:
+        raise ValueError(f"{target}: cannot be read to check it before replacing it") from exc
+    if marker not in existing:
+        raise ValueError(f"{target} exists and was not written by this tool; it is left alone")
 
 
 def _href(file: Path, base: Path, page: int | None) -> str:
@@ -430,8 +464,9 @@ def relink_html(html: str, folder: str, bibliography: str | None = None) -> dict
     if not isinstance(records, list):
         raise ValueError("the ledger data in this HTML cannot be read")
     rows = _rows(records, include_withdrawn=True)
-    links, unreadable = _resolve(rows, Path(folder).resolve(), bibliography)
-    target = source.with_name(source.name[: -len(source.suffix)] + PRIVATE_HTML)
+    target = source.with_name(source.stem + PRIVATE_HTML)
+    _check_overwrite(target, 'class="el-private"')
+    links, files_left = _resolve(rows, Path(folder).resolve(), bibliography)
     base = target.parent
 
     def add_link(match: re.Match[str]) -> str:
@@ -455,5 +490,5 @@ def relink_html(html: str, folder: str, bibliography: str | None = None) -> dict
         "notice": NOTICE,
         "records": len(rows),
         **_summary(links),
-        "unreadable_files": unreadable,
+        **files_left,
     }

@@ -602,8 +602,8 @@ def embed(
 ) -> tuple[str, list[str], list[str], dict[str, str]]:
     """The work with its claims marked and linked; also the located and unlocated claim ids and
     the claims left unlocated because their text is already marked for another claim."""
-    del header  # the work's own title and metadata stay as rendered
     doc = _parse(work_html)
+    del header  # the work's own title and metadata stay as rendered
     groups = summary._group(records)
     refs = reference_keys(work_html)
     key_hrefs = {
@@ -671,9 +671,9 @@ def embed(
     panel = layout == "panel" and bool(located)
     style = f"<style>{STYLE}{PANEL_STYLE if panel else ''}</style>"
     if panel:
-        body = _wrap_body(body, HINT, f"{section}{PANEL}<script>{SCRIPT}</script>")
-    else:
-        body = _wrap_body(body, "", section)
+        section += f"{PANEL}<script>{SCRIPT}</script>"
+    section += summary.data_script(records, level)
+    body = _wrap_body(body, HINT if panel else "", section)
     return _inject(_utf8(body), style), located, missing, overlapping
 
 

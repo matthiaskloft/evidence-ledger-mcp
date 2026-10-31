@@ -62,7 +62,7 @@ def test_groups_by_claim_in_order(path: str) -> None:
 def test_escapes_values(path: str) -> None:
     add(path, claim="<script>alert(1)</script>")
     html = write(path)
-    assert "<script" not in html
+    assert "<script>" not in html
     assert "&lt;script&gt;" in html
 
 

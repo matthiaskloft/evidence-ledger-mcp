@@ -238,8 +238,14 @@ def _check_public(url: str) -> list[str]:
     return addresses
 
 
-def _pdf_pages(body: bytes, max_pages: int) -> list[str]:
-    """The text of each page of a PDF; hyphenation across lines is left as is."""
+@dataclass
+class Pdf:
+    pages: list[str]  # the text of each page; hyphenation across lines is left as is
+    labels: list[str]  # the printed page numbers, e.g. "347" or "xiv"; empty if the PDF has none
+
+
+def _pdf_pages(body: bytes, max_pages: int) -> Pdf:
+    """The text and page labels of a PDF."""
     try:
         reader = pypdf.PdfReader(io.BytesIO(body))
         if reader.is_encrypted and reader.decrypt("") == pypdf.PasswordType.NOT_DECRYPTED:
@@ -253,24 +259,26 @@ def _pdf_pages(body: bytes, max_pages: int) -> list[str]:
             size += len(texts[-1])
             if size > MAX_CHARS:
                 raise FetchError("pdf too long")
+        labels = list(reader.page_labels) if "/PageLabels" in reader.root_object else []
     except FetchError:
         raise
     except Exception as exc:  # malformed PDFs raise PyPdfError, ValueError, KeyError, ...
         raise FetchError("unreadable pdf") from exc
     if not any(text.strip() for text in texts):
         raise FetchError("no text in pdf")
-    return texts
+    return Pdf(texts, labels)
 
 
 def _pdf_worker(body: bytes, max_pages: int, conn: Connection) -> None:
     logging.getLogger("pypdf").setLevel(logging.ERROR)  # its warnings can quote the file
     try:
-        conn.send((True, _pdf_pages(body, max_pages)))
+        pdf = _pdf_pages(body, max_pages)
+        conn.send((True, (pdf.pages, pdf.labels)))
     except FetchError as exc:
         conn.send((False, str(exc)))
 
 
-def pdf_pages(body: bytes) -> list[str]:
+def pdf_pages(body: bytes) -> Pdf:
     """`_pdf_pages` in a child process that is killed after PDF_TIMEOUT, since a single
     page's extraction cannot be interrupted and hostile PDFs can take hours."""
     context = multiprocessing.get_context("spawn")
@@ -290,13 +298,13 @@ def pdf_pages(body: bytes) -> list[str]:
         receive.close()
     if not ok:
         raise FetchError(value)
-    return list(value)
+    return Pdf(*value)
 
 
 def _text(response: Response) -> str:
     is_pdf = response.content_type in OCTET_TYPES and b"%PDF-" in response.body[:1024]
     if response.content_type in PDF_TYPES or is_pdf:
-        return "\n".join(pdf_pages(response.body))
+        return "\n".join(pdf_pages(response.body).pages)
     if response.content_type not in TEXT_TYPES:
         named = TYPE_NAME.match(response.content_type)
         raise FetchError(f"unsupported content type{f' {response.content_type}' if named else ''}")

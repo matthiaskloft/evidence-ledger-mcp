@@ -8,8 +8,10 @@ import hashlib
 import json
 import re
 from collections.abc import Iterator
+from html import escape, unescape
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote
 
 from evidence_ledger_mcp import checks, fetch, ledger
 
@@ -19,6 +21,25 @@ MAX_SPAN = 20000  # normalized characters between a quote's first and last words
 MIN_TITLE = 20  # normalized characters; shorter titles could match by chance
 FRONT_PAGES = 2
 ISBN_PAGES = 10
+PRIVATE_JSON = ".private.json"
+PRIVATE_HTML = ".private.html"
+NOTICE = (
+    "Private: this links to files on this computer. Do not share or publish it; share the"
+    " original instead."
+)
+BANNER = (
+    '<div class="el-private" role="note" style="background:#fde68a;color:#422006;'
+    'padding:.6em 1em;font:600 15px/1.4 system-ui,sans-serif;border-bottom:2px solid #b45309">'
+    f"{NOTICE}</div>"
+)
+NOINDEX = '<meta name="robots" content="noindex">'
+_DATA = re.compile(
+    r'<script type="application/json" id="evidence-ledger-data">(.*?)</script>', re.DOTALL
+)
+_RECORD_HEAD = re.compile(r'(<article class="record" data-record="([^"]*)">.*?</div>)', re.DOTALL)
+_TITLE = re.compile(r"<title[^>]*>", re.IGNORECASE)
+_BODY = re.compile(r"<body[^>]*>", re.IGNORECASE)
+_HEAD = re.compile(r"<head[^>]*>", re.IGNORECASE)
 STATUSES = ("found", "passage_not_found", "source_not_found", "not_searchable")
 
 
@@ -30,11 +51,11 @@ class _Library:
         self.files = sorted(p for p in folder.rglob("*") if p.suffix.lower() == ".pdf")
         if len(self.files) > MAX_FILES:
             raise ValueError(f"{folder}: more than {MAX_FILES} PDFs")
-        self.pages: dict[Path, list[str]] = {}
+        self.pages: dict[Path, fetch.Pdf] = {}
         self.unreadable: dict[str, str] = {}
         self.front: dict[Path, tuple[str, str, str]] = {}
 
-    def read(self, file: Path) -> list[str] | None:
+    def read(self, file: Path) -> fetch.Pdf | None:
         if file not in self.pages and str(file) not in self.unreadable:
             try:
                 if file.stat().st_size > MAX_FILE_BYTES:
@@ -49,11 +70,11 @@ class _Library:
     def fronts(self) -> Iterator[tuple[Path, tuple[str, str, str]]]:
         """Each readable PDF with its front matter prepared for DOI, ISBN and title matching."""
         for file in self.files:
-            if file not in self.front and (pages := self.read(file)) is not None:
+            if file not in self.front and (pdf := self.read(file)) is not None:
                 self.front[file] = (
-                    "\n".join(pages[:FRONT_PAGES]).casefold(),
-                    re.sub(r"[^0-9Xx]", "", "".join(pages[:ISBN_PAGES])).upper(),
-                    ledger.normalize("".join(pages[:FRONT_PAGES])),
+                    "\n".join(pdf.pages[:FRONT_PAGES]).casefold(),
+                    re.sub(r"[^0-9Xx]", "", "".join(pdf.pages[:ISBN_PAGES])).upper(),
+                    ledger.normalize("".join(pdf.pages[:FRONT_PAGES])),
                 )
             if file in self.front:
                 yield file, self.front[file]
@@ -142,34 +163,29 @@ def _find(record: ledger.Record, pages: list[str]) -> int | None | bool:
     return None
 
 
-def resolve_links(
-    path: str,
-    folder: str,
-    link_file: str,
-    bibliography: str | None = None,
-    include_withdrawn: bool = False,
-) -> dict[str, Any]:
-    """Match each record's source to a PDF in `folder`, find its passage by `quote_hash`, and
-    write the result to `link_file`; returns record ids by status, never source text."""
-    root = Path(folder).resolve()
+def _locator_page(record: ledger.Record, pdf: fetch.Pdf) -> tuple[int, str] | None:
+    """The PDF page of the record's `locator.page`: by the PDF's printed page labels, or, in a
+    PDF without labels, by number, which is right only where printed and PDF pages coincide."""
+    locator = record.get("locator")
+    page = str(locator.get("page", "")) if isinstance(locator, dict) else ""
+    if page and pdf.labels:
+        return (pdf.labels.index(page) + 1, "page_label") if page in pdf.labels else None
+    if page.isdigit() and 1 <= int(page) <= len(pdf.pages):
+        return int(page), "page_number"
+    return None
+
+
+def _resolve(
+    rows: list[tuple[str, ledger.Record]], root: Path, bibliography: str | None
+) -> tuple[dict[str, dict[str, Any]], dict[str, str]]:
+    """Each record's link (status, file and page, with where the page came from) and the PDFs
+    that could not be read."""
     if not root.is_dir():
-        raise ValueError(f"{folder}: not a folder")
-    target = Path(link_file).resolve()
-    if target.suffix.lower() != ".json":
-        raise ValueError("link_file must end in .json")
-    if target == Path(path).resolve():
-        raise ValueError("link_file must not be the ledger")
-    _, all_records = ledger.read(path)
-    rows = [
-        (str(r.get("id", f"record {n}")), r)
-        for n, r in enumerate(all_records, 1)
-        if include_withdrawn or "withdrawn" not in r
-    ]
+        raise ValueError(f"{root}: not a folder")
     by_key: dict[str, list[ledger.Record]] = {}
     for _, record in rows:
         if isinstance(record.get("key"), str):
             by_key.setdefault(record["key"], []).append(record)
-
     entries = checks.bibliography(bibliography) if bibliography else {}
     library = _Library(root)
     files = {
@@ -182,19 +198,55 @@ def resolve_links(
         if file is None:
             links[label] = {"status": "source_not_found"}
             continue
-        page = _find(record, library.pages[file])
+        pdf = library.pages[file]
+        page = _find(record, pdf.pages)
         link: dict[str, Any] = {"file": str(file)}
-        if page is False:
-            link["status"] = "not_searchable"
-        elif page is None:
-            link["status"] = "passage_not_found"
+        if page is False or page is None:
+            link["status"] = "not_searchable" if page is False else "passage_not_found"
+            if located := _locator_page(record, pdf):
+                link.update(page=located[0], page_from=located[1])
         else:
-            link.update(status="found", page=page)
+            link.update(status="found", page=page, page_from="passage")
         links[label] = link
+    return links, library.unreadable
 
+
+def _summary(links: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    return {
+        status: [label for label, link in links.items() if link["status"] == status]
+        for status in STATUSES
+    }
+
+
+def _rows(records: list[Any], include_withdrawn: bool) -> list[tuple[str, ledger.Record]]:
+    return [
+        (str(r.get("id", f"record {n}")), r)
+        for n, r in enumerate(records, 1)
+        if isinstance(r, dict) and (include_withdrawn or "withdrawn" not in r)
+    ]
+
+
+def resolve_links(
+    path: str,
+    folder: str,
+    link_file: str,
+    bibliography: str | None = None,
+    include_withdrawn: bool = False,
+) -> dict[str, Any]:
+    """Match each record's source to a PDF in `folder`, find its passage by `quote_hash`, and
+    write the result to `link_file`, whose name must mark it private; returns record ids by
+    status, never source text."""
+    target = Path(link_file).resolve()
+    if not target.name.lower().endswith(PRIVATE_JSON):
+        raise ValueError(f"link_file must end in {PRIVATE_JSON}: it is private to this computer")
+    root = Path(folder).resolve()
+    _, all_records = ledger.read(path)
+    rows = _rows(all_records, include_withdrawn)
+    links, unreadable = _resolve(rows, root, bibliography)
     target.write_text(
         json.dumps(
             {
+                "private": NOTICE,
                 "ledger": str(Path(path).resolve()),
                 "folder": str(root),
                 "created": datetime.datetime.now(datetime.UTC).isoformat(timespec="seconds"),
@@ -206,8 +258,84 @@ def resolve_links(
         + "\n",
         "utf-8",
     )
-    result: dict[str, Any] = {"records": len(rows), "link_file": str(target)}
-    for status in STATUSES:
-        result[status] = [label for label, link in links.items() if link["status"] == status]
-    result["unreadable_files"] = library.unreadable
-    return result
+    return {
+        "records": len(rows),
+        "link_file": str(target),
+        "notice": NOTICE,
+        **_summary(links),
+        "unreadable_files": unreadable,
+    }
+
+
+def _href(file: Path, base: Path, page: int | None) -> str:
+    """A link relative to the copy's folder when the PDF is inside it, so that the copy and
+    its PDFs can move together; otherwise an absolute file:// link."""
+    try:
+        href = quote(file.relative_to(base).as_posix())
+    except ValueError:
+        href = file.as_uri()
+    return f"{href}#page={page}" if page else href
+
+
+def _copy_link(link: dict[str, Any], base: Path) -> str:
+    if "file" not in link:
+        return ""
+    file = Path(link["file"])
+    page = link.get("page")
+    where = {
+        "passage": f", PDF page {page}, passage found",
+        "page_label": f", PDF page {page}, from the cited page",
+        "page_number": f", PDF page {page}, assuming the cited page number",
+    }.get(link.get("page_from", ""), "")
+    href = escape(_href(file, base, page))
+    return (
+        f'<p class="el-copy"><b>Your copy:</b> <a href="{href}">{escape(file.name)}</a>'
+        f"{escape(where)}</p>"
+    )
+
+
+def relink_html(html: str, folder: str, bibliography: str | None = None) -> dict[str, Any]:
+    """Write a private copy of a summary or embedded HTML file from this server, whose evidence
+    cards link to the reader's own PDFs in `folder`; the copy is named `<name>.private.html`,
+    next to the original, and is marked private in its title and a banner."""
+    source = Path(html).resolve()
+    if source.name.lower().endswith(PRIVATE_HTML):
+        raise ValueError("this is already a private copy: relink the original instead")
+    text = source.read_text("utf-8")
+    data = _DATA.search(text)
+    if data is None:
+        raise ValueError(
+            "no ledger data in this HTML: rebuild it with summarize_ledger or embed_ledger"
+        )
+    try:
+        records = json.loads(data.group(1))["records"]
+    except (json.JSONDecodeError, KeyError, TypeError) as exc:
+        raise ValueError("the ledger data in this HTML cannot be read") from exc
+    if not isinstance(records, list):
+        raise ValueError("the ledger data in this HTML cannot be read")
+    rows = _rows(records, include_withdrawn=True)
+    links, unreadable = _resolve(rows, Path(folder).resolve(), bibliography)
+    target = source.with_name(source.name[: -len(source.suffix)] + PRIVATE_HTML)
+    base = target.parent
+
+    def add_link(match: re.Match[str]) -> str:
+        link = links.get(unescape(match.group(2)), {})
+        return match.group(1) + _copy_link(link, base)
+
+    text = _RECORD_HEAD.sub(add_link, text)
+    text = _TITLE.sub(lambda m: m.group(0) + "[Private] ", text, count=1)
+    if body := _BODY.search(text):
+        text = text[: body.end()] + BANNER + text[body.end() :]
+    else:
+        text = BANNER + text
+    if head := _HEAD.search(text):
+        text = text[: head.end()] + NOINDEX + text[head.end() :]
+    with open(target, "w", encoding="utf-8", newline="\n") as handle:
+        handle.write(text)
+    return {
+        "path": str(target),
+        "notice": NOTICE,
+        "records": len(rows),
+        **_summary(links),
+        "unreadable_files": unreadable,
+    }

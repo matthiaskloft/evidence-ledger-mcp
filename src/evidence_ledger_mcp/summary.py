@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from collections.abc import Callable
 from html import escape
 from pathlib import Path
@@ -11,6 +12,8 @@ from urllib.parse import urlsplit
 from evidence_ledger_mcp import export, ledger
 from evidence_ledger_mcp.ledger import Record
 
+DATA_ID = "evidence-ledger-data"
+RELINK_FIELDS = ("id", "key", "doi", "isbn", "url", "locator", "quote", "quote_hash")
 LOCATOR_FIELDS = ("page", "section", "figure", "table")
 QUOTES_SHOWN = {
     "full": "complete",
@@ -189,7 +192,8 @@ def _record(record: Record, key_href: str | None = None) -> str:
     )
     prov = _provenance(record)
     added = f'<p class="provenance">Added by {prov}</p>' if prov else ""
-    return f'<article class="record">{head}{gone}{body}{meta}{added}</article>'
+    rid = _e(record.get("id", ""))
+    return f'<article class="record" data-record="{rid}">{head}{gone}{body}{meta}{added}</article>'
 
 
 def _anchor(anchor: object) -> str:
@@ -272,6 +276,16 @@ def _group(records: list[Record]) -> dict[str, list[Record]]:
     return dict(sorted(groups.items()))
 
 
+def data_script(records: list[Record], level: str) -> str:
+    """The fields a reader needs to relink a copy to their own PDFs, as JSON that the browser
+    does not run; anchors, notes and other fields stay out, and `<` is escaped so the data
+    cannot close the script element."""
+    kept = [{f: r[f] for f in RELINK_FIELDS if f in r} for r in records]
+    data = json.dumps({"level": level, "records": kept}, ensure_ascii=False)
+    data = data.replace("<", "\\u003c")
+    return f'<script type="application/json" id="{DATA_ID}">{data}</script>'
+
+
 def render(header: dict[str, Any], records: list[Record], level: str) -> str:
     work = header.get("work")
     work = work if isinstance(work, dict) else {}
@@ -296,7 +310,8 @@ def render(header: dict[str, Any], records: list[Record], level: str) -> str:
         f"<title>{title}: evidence ledger summary</title><style>{STYLE}</style></head>"
         f"<body><main><h1>{title}: evidence ledger summary</h1>{meta}"
         f"{_prose('note', 'Description', header.get('description'))}"
-        f"{_prose('note', 'Notes', header.get('notes'))}{claims}</main></body>"
+        f"{_prose('note', 'Notes', header.get('notes'))}{claims}</main>"
+        f"{data_script(records, level)}</body>"
         "</html>\n"
     )
 

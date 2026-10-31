@@ -6,7 +6,7 @@ from typing import Any
 
 import pytest
 
-from evidence_ledger_mcp import export, ledger, links
+from evidence_ledger_mcp import export, ledger, links, summary
 
 WORK = {"title": "Example work", "type": "manuscript"}
 PROVENANCE = {"by_type": "agent", "by": "Claude Code", "model": "claude-opus-5-5"}
@@ -81,7 +81,9 @@ def add(path: str, **changes: Any) -> str:
 
 
 def resolve(path: str, folder: Path, **kwargs: Any) -> dict[str, Any]:
-    return links.resolve_links(path, str(folder), str(folder.parent / "links.json"), **kwargs)
+    return links.resolve_links(
+        path, str(folder), str(folder.parent / "links.private.json"), **kwargs
+    )
 
 
 def test_passage_found_by_doi_with_page(path: str, folder: Path) -> None:
@@ -89,11 +91,12 @@ def test_passage_found_by_doi_with_page(path: str, folder: Path) -> None:
     (folder / "sub" / "article.pdf").write_bytes(ARTICLE)
     result = resolve(path, folder)
     assert result["found"] == ["R-0001"]
-    saved = json.loads((folder.parent / "links.json").read_text("utf-8"))
+    saved = json.loads((folder.parent / "links.private.json").read_text("utf-8"))
     assert saved["records"]["R-0001"] == {
         "file": str((folder / "sub" / "article.pdf").resolve()),
         "status": "found",
         "page": 2,
+        "page_from": "passage",
     }
     assert QUOTE not in json.dumps(result)
 
@@ -143,8 +146,8 @@ def test_withdrawn_records_are_skipped(path: str, folder: Path) -> None:
 
 def test_bad_arguments(path: str, folder: Path) -> None:
     with pytest.raises(ValueError, match="not a folder"):
-        links.resolve_links(path, str(folder / "missing"), str(folder / "l.json"))
-    with pytest.raises(ValueError, match=r".json"):
+        links.resolve_links(path, str(folder / "missing"), str(folder / "l.private.json"))
+    with pytest.raises(ValueError, match="private"):
         links.resolve_links(path, str(folder), str(folder / "links.txt"))
 
 
@@ -183,3 +186,83 @@ def test_ambiguous_doi_does_not_match(path: str, folder: Path) -> None:
     (folder / "a.pdf").write_bytes(ARTICLE)
     (folder / "b.pdf").write_bytes(ARTICLE)
     assert resolve(path, folder)["source_not_found"] == ["R-0001"]
+
+
+def summary_html(path: str, folder: Path, level: str = "full") -> Path:
+    out = folder.parent / f"summary-{level}.html"
+    summary.summarize_ledger(path, str(out), level)
+    return out
+
+
+def test_relink_writes_a_private_copy_with_relative_links(path: str, folder: Path) -> None:
+    add(path)
+    (folder / "sub" / "article.pdf").write_bytes(ARTICLE)
+    original = summary_html(path, folder)
+    result = links.relink_html(str(original), str(folder))
+    copy = Path(result["path"])
+    assert copy.name == "summary-full.private.html"
+    assert result["found"] == ["R-0001"] and "Do not share" in result["notice"]
+    html = copy.read_text("utf-8")
+    assert "<title>[Private] " in html and 'class="el-private"' in html
+    assert '<meta name="robots" content="noindex">' in html
+    assert 'href="pdfs/sub/article.pdf#page=2"' in html
+    assert "passage found" in html
+    assert "Your copy" not in original.read_text("utf-8")
+
+
+def test_relink_locator_export_uses_cited_page(path: str, folder: Path) -> None:
+    add(path)
+    (folder / "article.pdf").write_bytes(ARTICLE)
+    result = links.relink_html(str(summary_html(path, folder, "locator")), str(folder))
+    assert result["not_searchable"] == ["R-0001"]
+    html = Path(result["path"]).read_text("utf-8")
+    assert "article.pdf#page=2" in html and "assuming the cited page number" in html
+
+
+def test_relink_absolute_link_outside_the_copy_folder(
+    path: str, folder: Path, tmp_path: Path
+) -> None:
+    add(path)
+    (folder / "article.pdf").write_bytes(ARTICLE)
+    elsewhere = tmp_path / "out"
+    elsewhere.mkdir()
+    original = elsewhere / "s.html"
+    summary.summarize_ledger(path, str(original))
+    html = Path(links.relink_html(str(original), str(folder))["path"]).read_text("utf-8")
+    assert (folder / "article.pdf").resolve().as_uri() + "#page=2" in html
+
+
+def test_relink_refuses_private_copies_and_html_without_data(path: str, folder: Path) -> None:
+    add(path)
+    copy = links.relink_html(str(summary_html(path, folder)), str(folder))["path"]
+    with pytest.raises(ValueError, match="already a private copy"):
+        links.relink_html(copy, str(folder))
+    plain = folder.parent / "plain.html"
+    plain.write_text("<html><body>Hi</body></html>", "utf-8")
+    with pytest.raises(ValueError, match="no ledger data"):
+        links.relink_html(str(plain), str(folder))
+
+
+def test_embedded_data_holds_only_relink_fields(path: str, folder: Path) -> None:
+    add(path, note="Private reviewer note")
+    html = summary_html(path, folder, "masked").read_text("utf-8")
+    assert "Private reviewer note" in html  # the card shows it ...
+    data = html.split('id="evidence-ledger-data">')[1].split("</script>")[0]
+    assert "Private reviewer note" not in data and "anchor" not in data  # ... the data does not
+    assert QUOTE not in data
+
+
+def test_cited_page_maps_through_page_labels(path: str, folder: Path) -> None:
+    import io
+
+    import pypdf
+
+    writer = pypdf.PdfWriter(clone_from=pypdf.PdfReader(io.BytesIO(ARTICLE)))
+    writer.set_page_label(0, 1, style=pypdf.constants.PageLabelStyle.DECIMAL, start=346)
+    buffer = io.BytesIO()
+    writer.write(buffer)
+    (folder / "article.pdf").write_bytes(buffer.getvalue())
+    add(path, locator={"page": 347})
+    result = links.relink_html(str(summary_html(path, folder, "locator")), str(folder))
+    html = Path(result["path"]).read_text("utf-8")
+    assert "article.pdf#page=2" in html and "from the cited page" in html

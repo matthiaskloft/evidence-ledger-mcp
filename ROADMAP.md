@@ -55,6 +55,8 @@ A recipient can then rebuild the links in an export without the author's files.
 
 ## 0.6: library links in exports
 
+Status: links to PDFs in a folder are implemented in `relink_html`, which writes a private copy of a summary or embedded HTML; Zotero items are still planned.
+
 - Links from each record to the source in the reader's own library (a Zotero item or a local PDF, opened at the page of the passage), read from the local link file (see 0.5). Without it, exports link to the DOI or URL.
 
 ## Testing throughout

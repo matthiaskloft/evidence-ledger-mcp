@@ -260,3 +260,42 @@ def test_focus_hand_edit_is_validated(path: str) -> None:
     record["quote_focus"] = "missing"
     rewrite_line(path, 1, record)
     assert any("quote_focus" in e for e in ledger.validate_ledger(path))
+
+
+@pytest.mark.parametrize(
+    ("changes", "field"),
+    [
+        (
+            {"justification": "It says reduced unchecked citations from 40 to 3 per manuscript."},
+            "justification",
+        ),
+        (
+            {"locator": {"section": "Ledger records reduced unchecked citations from 40"}},
+            "locator.section",
+        ),
+        ({"note": "reduced unchecked citations from 40 to 3"}, "note"),
+    ],
+)
+def test_add_record_refuses_source_text_outside_quote_fields(
+    path: str, changes: dict[str, Any], field: str
+) -> None:
+    with pytest.raises(ValueError, match=f"{field} repeats source text"):
+        add(path, **changes)
+    assert ledger.read(path)[1] == []
+
+
+def test_add_record_allows_short_shared_wording_and_the_work_fields(path: str) -> None:
+    stored = add(
+        path,
+        justification="Counts of unchecked citations fell.",
+        claim="Ledger records reduced unchecked citations from 40 to 3 per manuscript",
+        anchor={"exact": "Ledger records reduced unchecked citations from 40 to 3"},
+    )
+    assert stored["id"] == "R-0001"
+
+
+def test_server_tells_agents_where_source_text_goes() -> None:
+    from evidence_ledger_mcp import server
+
+    assert "quote_focus" in (server.mcp.instructions or "")
+    assert "own words" in (server.mcp.instructions or "")

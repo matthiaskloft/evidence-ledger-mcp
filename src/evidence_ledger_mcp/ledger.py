@@ -8,6 +8,7 @@ import os
 import re
 import tempfile
 import unicodedata
+from collections.abc import Iterator
 from datetime import date
 from pathlib import Path
 from typing import Any
@@ -33,6 +34,61 @@ def quote_hash(quote: str, version: str = "n2") -> str:
     return (
         f"sha256-{version}:" + hashlib.sha256(normalize(quote, version).encode("utf-8")).hexdigest()
     )
+
+
+SOURCE_FIELDS = ("quote", "quote_prefix", "quote_suffix", "quote_focus")
+# Fields that quote the work itself, which is public; every other field is exported at all levels.
+WORK_FIELDS = ("claim", "anchor")
+# Letters and digits a shared run must reach to count as copied source text.
+WINDOW = 24
+
+
+def _strings(value: object, path: str = "") -> Iterator[tuple[str, str]]:
+    if isinstance(value, str):
+        yield path, value
+    elif isinstance(value, dict):
+        for name, item in value.items():
+            yield from _strings(item, f"{path}.{name}" if path else str(name))
+    elif isinstance(value, list):
+        for item in value:
+            yield from _strings(item, path)
+
+
+def windows(record: Record) -> set[str]:
+    """Every WINDOW-character run of the record's normalized source text."""
+    runs: set[str] = set()
+    for field in SOURCE_FIELDS:
+        if isinstance(text := record.get(field), str):
+            norm = normalize(text)
+            runs.update(norm[i : i + WINDOW] for i in range(len(norm) - WINDOW + 1))
+    return runs
+
+
+def leaks(value: object, runs: set[str]) -> bool:
+    """Whether any string in value shares a WINDOW-character run with the source text."""
+    for _, text in _strings(value):
+        norm = normalize(text)
+        if any(norm[i : i + WINDOW] in runs for i in range(len(norm) - WINDOW + 1)):
+            return True
+    return False
+
+
+def source_overlaps(record: Record) -> list[str]:
+    """Fields outside the quote fields that repeat a run of the record's own source text."""
+    runs = windows(record)
+    found = []
+    for field, value in record.items():
+        if field in SOURCE_FIELDS or field in WORK_FIELDS or field == "quote_hash":
+            continue
+        for path, text in _strings(value, field):
+            norm = normalize(text)
+            starts = [i for i in range(len(norm) - WINDOW + 1) if norm[i : i + WINDOW] in runs]
+            if starts:
+                end = starts[0] + WINDOW
+                while end < len(norm) and norm[end - WINDOW + 1 : end + 1] in runs:
+                    end += 1
+                found.append(f"{path} repeats source text ('{norm[starts[0] : end]}')")
+    return found
 
 
 def _dumps(obj: object) -> str:
@@ -125,6 +181,13 @@ def add_record(path: str, record: Record, provenance: dict[str, Any]) -> Record:
     new["provenance"] = {**provenance, "date": date.today().isoformat()}
     if errors := record_errors(new):
         raise ValueError("Invalid record: " + "; ".join(errors))
+    if overlaps := source_overlaps(new):
+        raise ValueError(
+            "Source text outside the quote fields: "
+            + "; ".join(overlaps)
+            + f". Rewrite in your own words; {WINDOW} or more letters and digits of the quote "
+            "would block a masked or locator export."
+        )
     for other in existing:
         same_claim = other.get("claim_id") == new["claim_id"]
         if same_claim and other.get("importance") != new.get("importance"):

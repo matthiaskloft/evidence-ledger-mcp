@@ -41,6 +41,14 @@ def add(path: str, **changes: Any) -> dict[str, Any]:
     return ledger.add_record(path, {**RECORD, **changes}, PROVENANCE)
 
 
+def add_with_note(path: str, note: str) -> None:
+    """Add a record, then put a note on it by hand: add_record refuses such notes."""
+    add(path)
+    lines = Path(path).read_text("utf-8").splitlines()
+    lines[-1] = json.dumps({**json.loads(lines[-1]), "note": note})
+    Path(path).write_text("\n".join(lines) + "\n", "utf-8")
+
+
 def out_of(path: str, name: str = "out.jsonl") -> str:
     return str(Path(path).parent / name)
 
@@ -106,7 +114,7 @@ def test_check_catches_changed_case_and_punctuation(path: str) -> None:
 
 
 def test_check_catches_prefix_in_note(path: str) -> None:
-    add(path, note=f"Context: {PREFIX}")
+    add_with_note(path, f"Context: {PREFIX}")
     with pytest.raises(ValueError, match="R-0001: contains source text from R-0001"):
         export.export_ledger(path, out_of(path), "locator")
 

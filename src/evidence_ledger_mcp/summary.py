@@ -48,7 +48,7 @@ h1 { font-size: 1.5rem; line-height: 1.3; margin: 0 0 0.75rem; }
   font-size: 0.85rem; color: var(--muted); }
 .meta div { min-width: 6rem; }
 .meta dt { font-size: 0.85rem; }
-.meta dd { margin: 0; overflow-wrap: anywhere; }
+.meta dd { margin: 0; overflow-wrap: anywhere; color: var(--text); opacity: 0.8; }
 section.claim { background: var(--card); border: 1px solid var(--line); border-radius: 10px;
   margin-top: 2.25rem; overflow: hidden; }
 .claim-part { padding: 1.4rem 1.6rem 0.8rem; }
@@ -79,7 +79,6 @@ mark { background: none; color: inherit; font-style: inherit;
 .claim-part .meta div, .more .meta div { display: contents; }
 .claim-part .meta dd, .more .meta dd { color: var(--text); opacity: 0.8; min-width: 0;
   line-break: anywhere; }
-.provenance { margin: 0.4rem 0 0; font-size: 0.85rem; color: var(--muted); }
 .withdrawn { color: var(--contrasts); font-weight: 600; }
 @media (max-width: 40rem) {
   main { padding: 1.5rem 0.75rem 3rem; }
@@ -206,12 +205,11 @@ def _record(record: Record, key_href: str | None = None) -> str:
             ),
             ("Zotero link", _e(record.get("zotero_link", ""))),
             ("derived from", _e(record.get("derived_from", ""))),
+            ("added by", _provenance(record)),
         ]
     )
-    prov = _provenance(record)
-    added = f'<p class="provenance">Added by {prov}</p>' if prov else ""
     rid = _e(record.get("id", ""))
-    more = f'<div class="more">{meta}{added}</div>' if meta or added else ""
+    more = f'<div class="more">{meta}</div>' if meta else ""
     return f'<article class="record" data-record="{rid}">{head}{gone}{body}{more}</article>'
 
 

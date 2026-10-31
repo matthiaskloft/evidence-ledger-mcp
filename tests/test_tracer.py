@@ -82,3 +82,12 @@ async def lifecycle(ledger: Path) -> None:
 
 def test_ledger_lifecycle_over_stdio(tmp_path: Path) -> None:
     anyio.run(lifecycle, tmp_path / "ledger.jsonl")
+
+
+def test_server_instructions_point_to_bug_report_without_self_filing() -> None:
+    from evidence_ledger_mcp.server import mcp
+
+    text = mcp.instructions or ""
+    assert "template=bug_report.yml" in text
+    assert "never file it yourself" in text
+    assert "absolute paths" in text

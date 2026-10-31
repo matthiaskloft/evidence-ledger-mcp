@@ -4,6 +4,10 @@ Changes to the MCP server package `evidence-ledger-mcp`. Schema changes are rele
 
 ## [Unreleased]
 
+### Added
+
+- Server instructions tell agents to suggest, never file, a bug report for a tool error or misleading result and to help the user remove quotes, source text, paths and credentials. A bug report issue template collects the details.
+
 ## [0.2.0] - 2026-10-31
 
 ### Fixed

@@ -8,6 +8,8 @@ Issues are welcome: questions, bug reports, feature requests and pointers to rel
 
 If you want a change to the schema, please also open an issue in [evidence-ledger-schema](https://github.com/matthiaskloft/evidence-ledger-schema/issues), stating the schema version, and link the two issues. The schema is changed there first; the server adopts it in a later release.
 
+To report a server error or a misleading result, use the [bug report form](https://github.com/matthiaskloft/evidence-ledger-mcp/issues/new?template=bug_report.yml). Remove quotes, source text, absolute paths and credentials first. If an agent notices the problem, it suggests the form to you and helps you strip those details; it does not file the issue itself.
+
 ## Pull requests
 
 Pull requests can only be opened by invited collaborators. If you would like to propose a change, please open an issue first; we will discuss it there.

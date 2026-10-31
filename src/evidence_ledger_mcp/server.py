@@ -10,10 +10,16 @@ from mcp.server.fastmcp import FastMCP
 from evidence_ledger_mcp import checks, embed, export, ledger, links, summary
 from evidence_ledger_mcp.schema import record_errors, schema_version
 
+BUG_REPORT_URL = (
+    "https://github.com/matthiaskloft/evidence-ledger-mcp/issues/new?template=bug_report.yml"
+)
+
 mcp = FastMCP(
     "evidence-ledger",
     instructions="Pass ledger paths as absolute paths; relative paths resolve against the "
-    "server's working directory.",
+    "server's working directory. To report a tool error or misleading result, suggest the "
+    "user file " + BUG_REPORT_URL + "; never file it yourself, and help them strip quotes, "
+    "source text, absolute paths and credentials unless they choose to share them.",
 )
 
 # Mapping, not dict: FastMCP returns a dict result as is but wraps other types as {"result": ...},

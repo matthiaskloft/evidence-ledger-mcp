@@ -4,9 +4,11 @@ Changes to the MCP server package `evidence-ledger-mcp`. Schema changes are rele
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-10-31
+
 ### Fixed
 
-- `resolve_links` marks a whole quote `across_pages` when it runs cleanly across a page break, not only when a running head, caption or sidebar sits between its two halves (#43).
+- `resolve_links` marks a whole quote `across_pages` when it runs cleanly across a page break, not only when a running head, caption or sidebar sits between its two halves (#43). The `resolve_links` tool description says so too.
 - The server instructions no longer repeat the fragment "server's working directory." after the source-text paragraph (#44).
 
 ## [0.3.0] - 2026-10-31

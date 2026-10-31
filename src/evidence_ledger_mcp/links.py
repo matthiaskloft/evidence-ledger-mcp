@@ -73,6 +73,7 @@ _BODY = re.compile(r"<body[^>]*>", re.IGNORECASE)
 _HEAD = re.compile(r"<head[^>]*>", re.IGNORECASE)
 STATUSES = ("found", "passage_not_found", "source_not_found", "not_searchable", "not_in_map")
 UNSAFE_SCHEMES = ("javascript", "data", "vbscript")
+_SCHEME = re.compile(r"([A-Za-z][A-Za-z0-9+.-]*):")
 
 
 class _Library:
@@ -354,8 +355,10 @@ def load_link_map(path: str) -> dict[str, dict[str, str]]:
         file = Path(entry["file"])
         item = {"file": str(file if file.is_absolute() else target.parent / file)}
         if "open" in entry:
-            scheme = entry["open"].partition(":")[0].casefold()
-            if not entry["open"].partition(":")[1] or scheme in UNSAFE_SCHEMES:
+            # A strict scheme: browsers drop leading spaces and inner tabs and newlines, so
+            # " javascript:" or "java	script:" must not slip past the unsafe list.
+            scheme = _SCHEME.match(entry["open"])
+            if not scheme or scheme[1].casefold() in UNSAFE_SCHEMES:
                 raise ValueError(f"{target}: sources/{key}/open: not a safe link")
             item["open"] = entry["open"]
         sources[key] = item

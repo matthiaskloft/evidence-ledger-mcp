@@ -550,6 +550,10 @@ def test_invalid_map_is_rejected(path: str, tmp_path: Path) -> None:
     )
     with pytest.raises(ValueError, match="not a safe link"):
         links.resolve_links(path, None, str(tmp_path / "l.private.json"), link_map=unsafe)
+    for sneaky in (" javascript:alert(1)", "java	script:alert(1)", "JavaScript:x"):
+        unsafe = write_map(tmp_path, {"k": {"file": "a.pdf", "open": sneaky}}, "s.private.json")
+        with pytest.raises(ValueError, match="not a safe link"):
+            links.resolve_links(path, None, str(tmp_path / "l.private.json"), link_map=unsafe)
 
 
 def test_map_name_must_end_in_private_json(path: str, tmp_path: Path) -> None:

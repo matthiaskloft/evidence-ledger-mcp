@@ -67,13 +67,13 @@ with `provenance` such as `{"by_type": "agent", "by": "Claude Code", "model": "c
 Requires Python 3.11 or newer. The server speaks MCP over stdio. With [uv](https://docs.astral.sh/uv/), run the released version from PyPI:
 
 ```bash
-uvx --from evidence-ledger-mcp==0.1.0 evidence-ledger-mcp
+uvx --from evidence-ledger-mcp==0.2.0 evidence-ledger-mcp
 ```
 
 For example, to add it to Claude Code:
 
 ```bash
-claude mcp add evidence-ledger -- uvx --from evidence-ledger-mcp==0.1.0 evidence-ledger-mcp
+claude mcp add evidence-ledger -- uvx --from evidence-ledger-mcp==0.2.0 evidence-ledger-mcp
 ```
 
 Other MCP clients take the same command and arguments. To run a source checkout instead, use `uv sync`, then configure the client to run `uv` with arguments `run`, `--directory`, the absolute path to the checkout, and `evidence-ledger-mcp`.

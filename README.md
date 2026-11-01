@@ -86,11 +86,12 @@ Pass absolute ledger paths to tools; relative paths resolve against the server's
 | --- | --- |
 | `schema_info` | Reports the server version and the supported schema version. |
 | `create_ledger` | Creates a JSON Lines ledger with a header; `work` needs `title` and `type`. |
-| `add_record` | Validates and appends a record; takes the record and a separate `provenance` object and returns the stored record. |
+| `add_record` | Validates and appends a record, refusing one whose `claim` or `importance` differs from another record of the same claim; takes the record and a separate `provenance` object and returns the stored record. |
+| `update_record` | Changes fields of a record (`changes` is merged in, a null value removes a field), recomputes the quote hash and sets the record's provenance to the given one with today's date. A change to `claim` or `importance` is copied to every record of the claim. Runs the checks of `add_record`; nothing is written when one fails. |
 | `get_record` | Returns one record by its ID. |
 | `find_records` | Finds records by `claim_id`, source `key` or claim `text`, or contestable records with `missing_evidence`. Filters combine; withdrawn records are left out unless `include_withdrawn` is set. |
 | `validate_record` | Checks one record against the schema without writing it. |
-| `validate_ledger` | Checks a whole ledger and lists the problems found. |
+| `validate_ledger` | Checks a whole ledger and lists the problems found, including records of one claim that disagree on claim text or importance. |
 | `withdraw_record` | Marks a record withdrawn, with a reason, instead of deleting it. |
 | `export_ledger` | Writes the ledger as JSON or JSON Lines at a chosen level to a new file. |
 | `summarize_ledger` | Writes a standalone HTML summary grouped by claim to a new file. |
@@ -103,8 +104,9 @@ Pass absolute ledger paths to tools; relative paths resolve against the server's
 
 1. `create_ledger` once per work, next to the manuscript or code.
 2. `add_record` whenever a source is cited, with the claim, its anchor, the source key, locator, quote, relation and justification. The server fills in IDs, the quote hash and the provenance date.
-3. `find_records` with `missing_evidence` and `validate_ledger` before submission, to find claims still lacking evidence.
-4. `check_ledger` with the rendered work, its bibliography and the sources (as text or public URLs), to catch anchors, keys and quotes that no longer match.
-5. `export_ledger`, `summarize_ledger` or `embed_ledger` at `masked` or `locator` level to share the ledger with co-authors, reviewers or a journal.
+3. `update_record` to correct a record (a quote, locator or claim wording) instead of withdrawing and re-adding it.
+4. `find_records` with `missing_evidence` and `validate_ledger` before submission, to find claims still lacking evidence.
+5. `check_ledger` with the rendered work, its bibliography and the sources (as text or public URLs), to catch anchors, keys and quotes that no longer match.
+6. `export_ledger`, `summarize_ledger` or `embed_ledger` at `masked` or `locator` level to share the ledger with co-authors, reviewers or a journal.
 
 The [tool reference](docs/tools.md) covers export levels, masking, embedding and every check in detail.

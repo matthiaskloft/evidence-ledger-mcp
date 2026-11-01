@@ -83,6 +83,20 @@ def add_record(path: str, record: dict[str, Any], provenance: dict[str, Any]) ->
 
 
 @mcp.tool()
+def update_record(
+    path: str, id: str, changes: dict[str, Any], provenance: dict[str, Any]
+) -> Record:
+    """Change fields of one record and return it. `changes` is merged into the record; a null
+    value removes a field. `id`, `withdrawn`, `quote_hash` and `provenance` cannot be changed,
+    and a withdrawn record cannot be edited. A new `quote` gets a new `quote_hash`; a removed one
+    drops it. The record's provenance becomes the given `provenance` with today's date. A
+    change to `claim` or `importance` is copied to every record with the same `claim_id`,
+    which keep their provenance. The same checks as `add_record` apply, and nothing is written
+    when one fails."""
+    return ledger.update_record(path, id, changes, provenance)
+
+
+@mcp.tool()
 def get_record(path: str, id: str) -> Record:
     """Return one record by its id."""
     return ledger.get_record(path, id)

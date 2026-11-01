@@ -11,6 +11,7 @@ The server works on its own: it does not depend on other MCP servers or on a par
 - Read, find and list records, e.g. by claim, by source key, or records still missing evidence.
 - Validate a whole ledger.
 - Withdraw records (`withdrawn`) instead of deleting them.
+- Update records in place (`update_record`).
 
 ## 0.2: export levels (implemented)
 

@@ -17,6 +17,8 @@ from evidence_ledger_mcp.schema import header_errors, record_errors, schema_vers
 
 Record = dict[str, Any]
 EVIDENCE_FIELDS = ("locator", "quote", "quote_hash", "justification")
+# Fields every record of a claim shares.
+CLAIM_FIELDS = ("claim", "importance")
 
 
 def normalize(text: str, version: str = "n2") -> str:
@@ -167,23 +169,13 @@ def create_ledger(
     return header
 
 
-def add_record(path: str, record: Record, provenance: dict[str, Any]) -> Record:
-    """Complete a record (id, claim_id, quote_hash, provenance date), validate and append it."""
-    for field in ("id", "withdrawn"):
-        if field in record:
-            raise ValueError(f"'{field}' is assigned by the server and cannot be supplied")
-    header, existing = read(path)
-    new: Record = {"id": _next_number([str(r.get("id", "")) for r in existing], "R"), **record}
-    new.setdefault("claim_id", _next_number([str(r.get("claim_id", "")) for r in existing], "C"))
-    if "quote" in new:
-        new["quote_hash"] = quote_hash(new["quote"])
-    elif "quote_hash" in new:
-        raise ValueError("'quote_hash' without 'quote' cannot be checked")
-    new["provenance"] = {**provenance, "date": date.today().isoformat()}
-    if errors := record_errors(new):
+def _check(header: dict[str, Any], record: Record, others: list[Record]) -> None:
+    """Raise ValueError if the record breaks the schema, repeats its source text outside the
+    quote fields, or disagrees with another record of its claim."""
+    if errors := record_errors(record):
         raise ValueError("Invalid record: " + "; ".join(errors))
-    runs = windows(new)
-    overlaps = source_overlaps(new)
+    runs = windows(record)
+    overlaps = source_overlaps(record)
     overlaps += [
         f"header.{field} repeats source text"
         for field in ("description", "notes")
@@ -197,15 +189,70 @@ def add_record(path: str, record: Record, provenance: dict[str, Any]) -> Record:
             f"{WINDOW} or more letters and digits of the quote would block a masked or locator "
             "export."
         )
-    for other in existing:
-        same_claim = other.get("claim_id") == new["claim_id"]
-        if same_claim and other.get("importance") != new.get("importance"):
-            raise ValueError(f"importance differs from {other.get('id')} on {new['claim_id']}")
+    for other in others:
+        if other.get("claim_id") != record.get("claim_id"):
+            continue
+        for field in CLAIM_FIELDS:
+            if other.get(field) != record.get(field):
+                raise ValueError(f"{field} differs from {other.get('id')} on {record['claim_id']}")
+
+
+def add_record(path: str, record: Record, provenance: dict[str, Any]) -> Record:
+    """Complete a record (id, claim_id, quote_hash, provenance date), validate and append it."""
+    for field in ("id", "withdrawn"):
+        if field in record:
+            raise ValueError(f"'{field}' is assigned by the server and cannot be supplied")
+    header, existing = read(path)
+    new: Record = {"id": _next_number([str(r.get("id", "")) for r in existing], "R"), **record}
+    new.setdefault("claim_id", _next_number([str(r.get("claim_id", "")) for r in existing], "C"))
+    if "quote" in new:
+        new["quote_hash"] = quote_hash(new["quote"])
+    elif "quote_hash" in new:
+        raise ValueError("'quote_hash' without 'quote' cannot be checked")
+    new["provenance"] = {**provenance, "date": date.today().isoformat()}
+    _check(header, new, existing)
     # A hand-edited file may lack its final newline; appending would join two lines.
     prefix = "" if Path(path).read_bytes().endswith(b"\n") else "\n"
     with open(path, "a", encoding="utf-8", newline="\n") as handle:
         handle.write(prefix + _dumps(new) + "\n")
     return new
+
+
+def update_record(path: str, id: str, changes: Record, provenance: dict[str, Any]) -> Record:
+    """Merge `changes` into a record (None removes a field), refresh its quote hash and
+    provenance, and copy `claim` or `importance` changes to the other records of the claim."""
+    forbidden = [f for f in ("id", "withdrawn", "quote_hash", "provenance") if f in changes]
+    if forbidden:
+        raise ValueError(f"{', '.join(repr(f) for f in forbidden)} cannot be changed")
+    if not changes:
+        raise ValueError("No changes given")
+    header, records = read(path)
+    target = next((r for r in records if r.get("id") == id), None)
+    if target is None:
+        raise ValueError(f"No record {id} in {path}")
+    if "withdrawn" in target:
+        raise ValueError(f"{id} is withdrawn and cannot be changed")
+    updated: Record = {k: v for k, v in target.items() if k not in changes}
+    updated.update({k: v for k, v in changes.items() if v is not None})
+    if "quote" in changes:
+        if "quote" not in updated:
+            updated.pop("quote_hash", None)
+        elif updated["quote"] != target.get("quote"):
+            updated["quote_hash"] = quote_hash(updated["quote"])
+    updated["provenance"] = {**provenance, "date": date.today().isoformat()}
+    result = [updated if r is target else r for r in records]
+    changed = [updated]
+    if claim_changes := {f: changes[f] for f in CLAIM_FIELDS if f in changes}:
+        for number, other in enumerate(result):
+            if other is not updated and other.get("claim_id") == updated.get("claim_id"):
+                result[number] = {k: v for k, v in other.items() if k not in claim_changes} | {
+                    k: v for k, v in claim_changes.items() if v is not None
+                }
+                changed.append(result[number])
+    for record in changed:
+        _check(header, record, [r for r in result if r is not record])
+    _rewrite(path, header, result)
+    return updated
 
 
 def get_record(path: str, id: str) -> Record:
@@ -260,6 +307,7 @@ def validate_ledger(path: str) -> list[str]:
     level = header.get("level")
     seen_ids: set[str] = set()
     importance: dict[str, set[str | None]] = {}
+    claims: dict[str, set[str]] = {}
     for number, line in enumerate(lines[1:], start=2):
         if not line.strip():
             continue
@@ -310,10 +358,17 @@ def validate_ledger(path: str) -> list[str]:
         # A non-string importance is already reported above and cannot go into a set.
         if "claim_id" in record and isinstance(record.get("importance"), str | None):
             importance.setdefault(str(record["claim_id"]), set()).add(record.get("importance"))
+        if "claim_id" in record and isinstance(record.get("claim"), str):
+            claims.setdefault(str(record["claim_id"]), set()).add(record["claim"])
     problems += [
         f"{claim}: records disagree on importance"
         for claim, levels in importance.items()
         if len(levels) > 1
+    ]
+    problems += [
+        f"{claim}: records disagree on claim text"
+        for claim, texts in claims.items()
+        if len(texts) > 1
     ]
     return problems
 

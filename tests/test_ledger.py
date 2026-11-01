@@ -347,3 +347,153 @@ def test_validate_ledger_reports_header_overlaps(path: str) -> None:
     lines[0] = json.dumps(first)
     Path(path).write_text("\n".join(lines) + "\n", "utf-8")
     assert "R-0001: header.notes repeats source text" in ledger.validate_ledger(path)
+
+
+def update(path: str, record_id: str, **changes: Any) -> dict[str, Any]:
+    return ledger.update_record(path, record_id, changes, {**PROVENANCE, "by": "Editor"})
+
+
+def test_update_record_merges_and_refreshes_provenance(path: str) -> None:
+    add(path, note="Old note")
+    add(path, key="other")
+    other_line = Path(path).read_text("utf-8").splitlines()[2]
+    stored = update(path, "R-0001", locator={"page": 9}, note=None)
+    assert stored["locator"] == {"page": 9}
+    assert "note" not in stored
+    assert (stored["id"], stored["claim_id"]) == ("R-0001", "C-0001")
+    assert stored["provenance"]["by"] == "Editor"
+    assert stored["provenance"]["date"]
+    assert ledger.get_record(path, "R-0001") == stored
+    assert Path(path).read_text("utf-8").splitlines()[2] == other_line
+    assert ledger.validate_ledger(path) == []
+
+
+def test_update_record_quote_hash(path: str) -> None:
+    kept = add(path)
+    legacy = {**kept, "quote_hash": ledger.quote_hash(kept["quote"], "n1")}
+    rewrite_line(path, 1, legacy)
+    unchanged = update(path, "R-0001", quote=kept["quote"], justification="Reworded.")
+    assert unchanged["quote_hash"].startswith("sha256-n1:")
+    new_quote = "Ledger records reduced unchecked citations from 40 to 2 per manuscript"
+    changed = update(path, "R-0001", quote=new_quote)
+    assert changed["quote_hash"] == ledger.quote_hash(new_quote)
+    assert changed["quote_hash"].startswith("sha256-n2:")
+    assert ledger.validate_ledger(path) == []
+    removed = update(
+        path,
+        "R-0001",
+        quote=None,
+        justification=None,
+        locator=None,
+        contestable=False,
+        contestable_reason="Common knowledge",
+    )
+    assert "quote" not in removed
+    assert "quote_hash" not in removed
+
+
+def test_update_record_copies_claim_fields_to_the_claim(path: str) -> None:
+    add(path, importance="critical")
+    add(path, claim_id="C-0001", key="other", importance="critical")
+    add(path, claim_id="C-0001", key="third", importance="critical")
+    add(path, key="elsewhere", claim="Another claim.")
+    ledger.withdraw_record(path, "R-0003", "Duplicate")
+    before = {r["id"]: r for r in ledger.read(path)[1]}
+    update(path, "R-0001", claim="Ledgers cut unchecked citations a lot.", importance="supporting")
+    after = {r["id"]: r for r in ledger.read(path)[1]}
+    for id in ("R-0001", "R-0002", "R-0003"):
+        assert after[id]["claim"] == "Ledgers cut unchecked citations a lot."
+        assert after[id]["importance"] == "supporting"
+    for id in ("R-0002", "R-0003"):
+        assert after[id]["provenance"] == before[id]["provenance"]
+    assert after["R-0003"]["withdrawn"] == "Duplicate"
+    assert after["R-0004"] == before["R-0004"]
+    assert ledger.validate_ledger(path) == []
+    update(path, "R-0002", importance=None)
+    assert all("importance" not in r for r in ledger.read(path)[1][:3])
+    assert ledger.validate_ledger(path) == []
+
+
+def test_update_record_non_claim_change_leaves_siblings(path: str) -> None:
+    add(path)
+    add(path, claim_id="C-0001", key="other")
+    before = Path(path).read_text("utf-8").splitlines()[2]
+    update(path, "R-0001", key="changed")
+    assert Path(path).read_text("utf-8").splitlines()[2] == before
+
+
+@pytest.mark.parametrize(
+    ("id", "changes", "match"),
+    [
+        ("R-0001", {"id": "R-0009"}, "'id'"),
+        ("R-0001", {"withdrawn": "x"}, "'withdrawn'"),
+        ("R-0001", {"quote_hash": README_HASH}, "'quote_hash'"),
+        ("R-0001", {"provenance": {"by_type": "agent", "by": "X"}}, "'provenance'"),
+        ("R-0001", {}, "No changes"),
+        ("R-0009", {"note": "x"}, "R-0009"),
+        ("R-0003", {"note": "x"}, "withdrawn"),
+        ("R-0001", {"claim_type": "nonsense"}, "Invalid record"),
+        ("R-0001", {"quote_focus": "missing"}, "quote_focus"),
+        (
+            "R-0001",
+            {"justification": "Reduced unchecked citations from 40 to 3 per manuscript."},
+            "justification repeats source text",
+        ),
+        ("R-0001", {"claim_id": "C-0002"}, "claim differs from R-0002 on C-0002"),
+        ("R-0001", {"claim_id": "C-0002", "claim": "Another claim."}, "importance differs"),
+    ],
+)
+def test_update_record_rejections_write_nothing(
+    path: str, id: str, changes: dict[str, Any], match: str
+) -> None:
+    add(path)
+    add(path, key="other", claim="Another claim.", importance="critical")
+    add(path)
+    ledger.withdraw_record(path, "R-0003", "Duplicate")
+    before = Path(path).read_bytes()
+    with pytest.raises(ValueError, match=match):
+        ledger.update_record(path, id, changes, PROVENANCE)
+    assert Path(path).read_bytes() == before
+
+
+def test_update_record_checks_header_overlap(tmp_path: Path) -> None:
+    target = str(tmp_path / "h.jsonl")
+    ledger.create_ledger(target, WORK, description="Covers: " + RECORD["quote"])
+    line = json.dumps(
+        RECORD
+        | {
+            "id": "R-0001",
+            "claim_id": "C-0001",
+            "quote_hash": README_HASH,
+            "provenance": PROVENANCE,
+        }
+    )
+    Path(target).write_text(Path(target).read_text("utf-8") + line + "\n", "utf-8")
+    before = Path(target).read_bytes()
+    with pytest.raises(ValueError, match=r"header\.description"):
+        update(target, "R-0001", note="x")
+    assert Path(target).read_bytes() == before
+
+
+def test_update_record_fixes_a_hand_edited_disagreement(path: str) -> None:
+    add(path)
+    add(path, claim_id="C-0001", key="other")
+    rewrite_line(path, 2, {**ledger.read(path)[1][1], "claim": "Drifted."})
+    assert "C-0001: records disagree on claim text" in ledger.validate_ledger(path)
+    update(path, "R-0001", claim="Agreed wording.")
+    assert ledger.validate_ledger(path) == []
+
+
+def test_add_record_refuses_a_different_claim_text(path: str) -> None:
+    add(path)
+    before = Path(path).read_bytes()
+    with pytest.raises(ValueError, match="claim differs from R-0001 on C-0001"):
+        add(path, claim_id="C-0001", claim="A different claim.")
+    assert Path(path).read_bytes() == before
+
+
+def test_validate_reports_claim_text_disagreement(path: str) -> None:
+    add(path)
+    second = add(path, claim_id="C-0001")
+    rewrite_line(path, 2, {**second, "claim": "A different claim."})
+    assert "C-0001: records disagree on claim text" in ledger.validate_ledger(path)

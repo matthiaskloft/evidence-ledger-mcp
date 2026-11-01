@@ -4,6 +4,14 @@ Changes to the MCP server package `evidence-ledger-mcp`. Schema changes are rele
 
 ## [Unreleased]
 
+### Added
+
+- `update_record` changes fields of a record in place (#48): `changes` is merged into the record and a null value removes a field. `id`, `withdrawn`, `quote_hash` and `provenance` cannot be changed, and a withdrawn record cannot be edited. A new `quote` gets a new `quote_hash`, a removed one drops it, and an unchanged one keeps its hash. The record's provenance becomes the given one with today's date. A change to `claim` or `importance` is copied to every record with the same `claim_id`, withdrawn ones included, which keep their provenance. The checks of `add_record` apply and nothing is written when one fails.
+
+### Changed
+
+- `add_record` refuses a record whose `claim` differs from another record on the same `claim_id`, as it already did for `importance`, and `validate_ledger` reports `C-xxxx: records disagree on claim text` (#51).
+
 ## [0.4.0] - 2026-10-31
 
 ### Added

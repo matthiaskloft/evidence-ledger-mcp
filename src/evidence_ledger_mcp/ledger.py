@@ -17,6 +17,8 @@ from evidence_ledger_mcp.schema import header_errors, record_errors, schema_vers
 
 Record = dict[str, Any]
 EVIDENCE_FIELDS = ("locator", "quote", "quote_hash", "justification")
+# Fields every record of a claim shares.
+CLAIM_FIELDS = ("claim", "importance")
 
 
 def normalize(text: str, version: str = "n2") -> str:
@@ -134,17 +136,54 @@ def _next_number(values: list[str], prefix: str) -> str:
     return f"{prefix}-{max(numbers, default=0) + 1:04d}"
 
 
-def _rewrite(path: str, header: dict[str, Any], records: list[Record]) -> None:
-    """Replace the file atomically: write a temp file in the same directory, then swap it in."""
-    text = "".join(_dumps(obj) + "\n" for obj in [{"ledger": header}, *records])
+def _temp_file(path: str, data: bytes) -> str:
+    """Write `data` to a new temp file next to `path` and return its name."""
     fd, tmp = tempfile.mkstemp(dir=Path(path).parent, suffix=".tmp")
     try:
-        with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as handle:
-            handle.write(text)
-        os.replace(tmp, path)
+        with os.fdopen(fd, "wb") as handle:
+            handle.write(data)
     except BaseException:
         Path(tmp).unlink(missing_ok=True)
         raise
+    return tmp
+
+
+def _rewrite_all(files: list[tuple[str, dict[str, Any], list[Record]]]) -> None:
+    """Replace several ledgers, in the order given: all of them or, as far as practical, none.
+
+    Every new content is written to a temp file first. The temp files then replace the ledgers
+    one by one; if a replacement fails, the ledgers already replaced are restored from their
+    original bytes (again via temp file and replace), leftover temp files are removed and the
+    error is raised. Only a failure of the restore itself can leave a ledger changed."""
+    originals = {path: Path(path).read_bytes() for path, _, _ in files}
+    temps: list[tuple[str, str]] = []
+    replaced: list[str] = []
+    try:
+        for path, header, records in files:
+            text = "".join(_dumps(obj) + "\n" for obj in [{"ledger": header}, *records])
+            temps.append((path, _temp_file(path, text.encode("utf-8"))))
+        for path, tmp in temps:
+            os.replace(tmp, path)
+            replaced.append(path)
+    except BaseException:
+        for path in replaced:
+            try:
+                restore = _temp_file(path, originals[path])
+                try:
+                    os.replace(restore, path)
+                except BaseException:
+                    Path(restore).unlink(missing_ok=True)
+                    raise
+            except OSError:
+                pass  # keep restoring the others; the original error is the one to report
+        for _, tmp in temps:
+            Path(tmp).unlink(missing_ok=True)
+        raise
+
+
+def _rewrite(path: str, header: dict[str, Any], records: list[Record]) -> None:
+    """Replace the file atomically: write a temp file in the same directory, then swap it in."""
+    _rewrite_all([(path, header, records)])
 
 
 def create_ledger(
@@ -167,23 +206,13 @@ def create_ledger(
     return header
 
 
-def add_record(path: str, record: Record, provenance: dict[str, Any]) -> Record:
-    """Complete a record (id, claim_id, quote_hash, provenance date), validate and append it."""
-    for field in ("id", "withdrawn"):
-        if field in record:
-            raise ValueError(f"'{field}' is assigned by the server and cannot be supplied")
-    header, existing = read(path)
-    new: Record = {"id": _next_number([str(r.get("id", "")) for r in existing], "R"), **record}
-    new.setdefault("claim_id", _next_number([str(r.get("claim_id", "")) for r in existing], "C"))
-    if "quote" in new:
-        new["quote_hash"] = quote_hash(new["quote"])
-    elif "quote_hash" in new:
-        raise ValueError("'quote_hash' without 'quote' cannot be checked")
-    new["provenance"] = {**provenance, "date": date.today().isoformat()}
-    if errors := record_errors(new):
+def _check(header: dict[str, Any], record: Record, others: list[Record]) -> None:
+    """Raise ValueError if the record breaks the schema, repeats its source text outside the
+    quote fields, or disagrees with another record of its claim."""
+    if errors := record_errors(record):
         raise ValueError("Invalid record: " + "; ".join(errors))
-    runs = windows(new)
-    overlaps = source_overlaps(new)
+    runs = windows(record)
+    overlaps = source_overlaps(record)
     overlaps += [
         f"header.{field} repeats source text"
         for field in ("description", "notes")
@@ -197,15 +226,179 @@ def add_record(path: str, record: Record, provenance: dict[str, Any]) -> Record:
             f"{WINDOW} or more letters and digits of the quote would block a masked or locator "
             "export."
         )
-    for other in existing:
-        same_claim = other.get("claim_id") == new["claim_id"]
-        if same_claim and other.get("importance") != new.get("importance"):
-            raise ValueError(f"importance differs from {other.get('id')} on {new['claim_id']}")
+    for other in others:
+        if other.get("claim_id") != record.get("claim_id"):
+            continue
+        for field in CLAIM_FIELDS:
+            if other.get(field) != record.get(field):
+                raise ValueError(f"{field} differs from {other.get('id')} on {record['claim_id']}")
+
+
+def _others(path: str, related: list[str] | None) -> list[Record]:
+    """Records of the related ledgers, leaving out `path` itself."""
+    records: list[Record] = []
+    for other in related or []:
+        if not _same_file(path, other):
+            records += read(other)[1]
+    return records
+
+
+def _same_file(a: str, b: str) -> bool:
+    return Path(a).resolve() == Path(b).resolve()
+
+
+def _append(path: str, record: Record) -> None:
     # A hand-edited file may lack its final newline; appending would join two lines.
     prefix = "" if Path(path).read_bytes().endswith(b"\n") else "\n"
     with open(path, "a", encoding="utf-8", newline="\n") as handle:
-        handle.write(prefix + _dumps(new) + "\n")
+        handle.write(prefix + _dumps(record) + "\n")
+
+
+def add_record(
+    path: str, record: Record, provenance: dict[str, Any], related: list[str] | None = None
+) -> Record:
+    """Complete a record (id, claim_id, quote_hash, provenance date), validate and append it.
+    New ids and claim ids are numbered past those of this ledger and every `related` ledger,
+    and the record must agree on claim text and importance with the records of its claim in
+    all of them."""
+    for field in ("id", "withdrawn"):
+        if field in record:
+            raise ValueError(f"'{field}' is assigned by the server and cannot be supplied")
+    header, existing = read(path)
+    taken = existing + _others(path, related)
+    new: Record = {"id": _next_number([str(r.get("id", "")) for r in taken], "R"), **record}
+    new.setdefault("claim_id", _next_number([str(r.get("claim_id", "")) for r in taken], "C"))
+    if "quote" in new:
+        new["quote_hash"] = quote_hash(new["quote"])
+    elif "quote_hash" in new:
+        raise ValueError("'quote_hash' without 'quote' cannot be checked")
+    new["provenance"] = {**provenance, "date": date.today().isoformat()}
+    _check(header, new, taken)
+    _append(path, new)
     return new
+
+
+def move_record(path: str, id: str, to: str, related: list[str] | None = None) -> Record:
+    """Move a record (withdrawn ones too) to another ledger, keeping its id, claim_id and
+    provenance. It must agree on claim text and importance with the records of its claim in `to`
+    and in the `related` ledgers. Both ledgers are rewritten together (all or none; on a write
+    error the one already replaced is restored): `to` first, then `path`."""
+    if _same_file(path, to):
+        raise ValueError("Source and target are the same ledger")
+    header, records = read(path)
+    moved = next((r for r in records if r.get("id") == id), None)
+    if moved is None:
+        raise ValueError(f"No record {id} in {path}")
+    to_header, to_records = read(to)
+    if any(r.get("id") == id for r in to_records):
+        raise ValueError(f"{id} already exists in {to}")
+    _check(to_header, moved, to_records + _others(to, related))
+    _rewrite_all(
+        [
+            (to, to_header, [*to_records, moved]),
+            (path, header, [r for r in records if r is not moved]),
+        ]
+    )
+    return moved
+
+
+def update_records(
+    path: str, updates: list[dict[str, Any]], related: list[str] | None = None
+) -> list[Record]:
+    """Apply `updates` (each `{"id": ..., "changes": {...}}`) in order and rewrite the ledger once.
+
+    Each change is merged into the record (None removes a field) and refreshes its quote hash;
+    `claim` or `importance` changes are copied to the other records of the claim, also in the
+    `related` ledgers. The record's provenance stays as it was: it records the original
+    assessment. Later updates see earlier ones, a duplicate id is applied in order, and every
+    affected record is checked against the final state of all ledgers. All refusals are collected
+    into one ValueError, each prefixed with the item index and record id, and nothing is written
+    then. Otherwise the ledgers that changed are rewritten together, the related ones first and
+    the edited one last: all of them or none (on a write error the ones already replaced are
+    restored). Returns, for each item, its record in the final state (so two items on one record
+    return the same, fully updated record)."""
+    return _update(path, updates, related, single=False)
+
+
+def _update(
+    path: str, updates: list[dict[str, Any]], related: list[str] | None, single: bool
+) -> list[Record]:
+    """Core of `update_records`; `single` drops the batch prefixes from the error message."""
+    if not updates:
+        raise ValueError("No updates given")
+    header, records = read(path)
+    # (path, header, rows) of the edited ledger (index 0) and of every distinct related ledger.
+    ledgers: list[tuple[str, dict[str, Any], list[Record]]] = [(path, header, records)]
+    for other_path in related or []:
+        if any(_same_file(other_path, known) for known, _, _ in ledgers):
+            continue
+        other_header, rows = read(other_path)
+        ledgers.append((other_path, other_header, rows))
+    errors: list[str] = []
+    touched: dict[tuple[int, str], list[int]] = {}  # (ledger, record id) -> updates that changed it
+    applied: list[str | None] = []
+    for index, item in enumerate(updates):
+        prefix = "" if single else f"updates[{index}] ({item.get('id')}): "
+        applied.append(None)
+        id, changes = item.get("id"), item.get("changes")
+        if not isinstance(id, str) or not isinstance(changes, dict):
+            errors.append(prefix + "needs an 'id' string and a 'changes' object")
+            continue
+        forbidden = [f for f in ("id", "withdrawn", "quote_hash", "provenance") if f in changes]
+        if forbidden:
+            errors.append(prefix + f"{', '.join(repr(f) for f in forbidden)} cannot be changed")
+            continue
+        if not changes:
+            errors.append(prefix + "No changes given")
+            continue
+        position = next((n for n, r in enumerate(records) if r.get("id") == id), None)
+        if position is None:
+            errors.append(prefix + f"No record {id} in {path}")
+            continue
+        target = records[position]
+        if "withdrawn" in target:
+            errors.append(prefix + f"{id} is withdrawn and cannot be changed")
+            continue
+        updated: Record = {k: v for k, v in target.items() if k not in changes}
+        updated.update({k: v for k, v in changes.items() if v is not None})
+        if "quote" in changes:
+            if "quote" not in updated:
+                updated.pop("quote_hash", None)
+            elif updated["quote"] != target.get("quote"):
+                updated["quote_hash"] = quote_hash(updated["quote"])
+        records[position] = updated
+        touched.setdefault((0, id), []).append(index)
+        applied[index] = id
+        if claim_changes := {f: changes[f] for f in CLAIM_FIELDS if f in changes}:
+            for ledger_number, (_, _, rows) in enumerate(ledgers):
+                for number, other in enumerate(rows):
+                    if other is not updated and other.get("claim_id") == updated.get("claim_id"):
+                        rows[number] = {
+                            k: v for k, v in other.items() if k not in claim_changes
+                        } | {k: v for k, v in claim_changes.items() if v is not None}
+                        touched.setdefault((ledger_number, str(other.get("id"))), []).append(index)
+    everything = [r for _, _, rows in ledgers for r in rows]
+    for (ledger_number, id), indexes in touched.items():
+        _, ledger_header, rows = ledgers[ledger_number]
+        record = next(r for r in rows if r.get("id") == id)
+        try:
+            _check(ledger_header, record, [r for r in everything if r is not record])
+        except ValueError as error:
+            names = ", ".join(str(n) for n in dict.fromkeys(indexes))
+            errors.append(str(error) if single else f"updates[{names}] ({id}): {error}")
+    if errors:
+        if single:
+            raise ValueError(errors[0])
+        raise ValueError(f"{len(errors)} problem(s), nothing written: " + " | ".join(errors))
+    changed_ledgers = {ledger_number for ledger_number, _ in touched}
+    _rewrite_all([ledgers[n] for n in [*range(1, len(ledgers)), 0] if n in changed_ledgers])
+    by_id = {str(r.get("id")): r for r in records}
+    return [by_id[str(id)] for id in applied]
+
+
+def update_record(path: str, id: str, changes: Record, related: list[str] | None = None) -> Record:
+    """Merge `changes` into one record and return it; see `update_records`."""
+    return _update(path, [{"id": id, "changes": changes}], related, single=True)[0]
 
 
 def get_record(path: str, id: str) -> Record:
@@ -243,8 +436,10 @@ def find_records(
     return found
 
 
-def validate_ledger(path: str) -> list[str]:
-    """Return all problems found in the ledger, empty if it is valid."""
+def validate_ledger(path: str, related: list[str] | None = None) -> list[str]:
+    """Return all problems found in the ledger, empty if it is valid. With `related` ledgers,
+    also report ids this ledger shares with them and claims whose records here and there
+    disagree on claim text or importance."""
     lines = _lines(path)
     header = _header(lines[0]) if lines else None
     if header is None:
@@ -260,6 +455,7 @@ def validate_ledger(path: str) -> list[str]:
     level = header.get("level")
     seen_ids: set[str] = set()
     importance: dict[str, set[str | None]] = {}
+    claims: dict[str, set[str]] = {}
     for number, line in enumerate(lines[1:], start=2):
         if not line.strip():
             continue
@@ -310,11 +506,43 @@ def validate_ledger(path: str) -> list[str]:
         # A non-string importance is already reported above and cannot go into a set.
         if "claim_id" in record and isinstance(record.get("importance"), str | None):
             importance.setdefault(str(record["claim_id"]), set()).add(record.get("importance"))
+        if "claim_id" in record and isinstance(record.get("claim"), str):
+            claims.setdefault(str(record["claim_id"]), set()).add(record["claim"])
     problems += [
         f"{claim}: records disagree on importance"
         for claim, levels in importance.items()
         if len(levels) > 1
     ]
+    problems += [
+        f"{claim}: records disagree on claim text"
+        for claim, texts in claims.items()
+        if len(texts) > 1
+    ]
+    own_claims = {k: len(v) for k, v in claims.items()}
+    own_importance = {k: len(v) for k, v in importance.items()}
+    shared: set[str] = set()
+    for other in related or []:
+        if _same_file(path, other):
+            continue
+        rows = read(other)[1]
+        used = {r.get("id") for r in rows}
+        problems += [
+            f"{label}: id also used in {other}" for label in sorted(seen_ids & used, key=str)
+        ]
+        for row in rows:
+            claim_id = str(row.get("claim_id"))
+            if claim_id not in own_claims and claim_id not in own_importance:
+                continue
+            shared.add(claim_id)
+            if isinstance(row.get("claim"), str):
+                claims.setdefault(claim_id, set()).add(row["claim"])
+            if isinstance(row.get("importance"), str | None):
+                importance.setdefault(claim_id, set()).add(row.get("importance"))
+    for claim in sorted(shared):
+        if len(claims.get(claim, ())) > max(1, own_claims.get(claim, 0)):
+            problems.append(f"{claim}: records disagree on claim text across related ledgers")
+        if len(importance.get(claim, ())) > max(1, own_importance.get(claim, 0)):
+            problems.append(f"{claim}: records disagree on importance across related ledgers")
     return problems
 
 

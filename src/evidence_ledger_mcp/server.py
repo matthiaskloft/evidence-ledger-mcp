@@ -22,7 +22,7 @@ mcp = FastMCP(
     "`quote_prefix`, `quote_suffix`, `quote_focus`). Write every other field (`justification`, "
     "`locator`, `note`, and the header's `description` and `notes`) in your own words, because "
     "they are exported at every level; a run of 24 or more letters and digits from a quote there "
-    "blocks masked and locator exports, and `add_record` refuses it. "
+    "blocks masked and locator exports, and `add_record` and `update_record` refuse it. "
     "When a tool fails or a result looks wrong (a valid record "
     "rejected, an export that fails its own validation, a check that blocks an export without "
     "a clear reason), stop and tell the user; do not work around it or edit the ledger by hand "

@@ -87,7 +87,8 @@ Pass absolute ledger paths to tools; relative paths resolve against the server's
 | `schema_info` | Reports the server version and the supported schema version. |
 | `create_ledger` | Creates a JSON Lines ledger with a header; `work` needs `title` and `type`. |
 | `add_record` | Validates and appends a record, refusing one whose `claim` or `importance` differs from another record of the same claim; takes the record and a separate `provenance` object and returns the stored record. With `related`, IDs are numbered past those of the other ledgers and the claim must agree with its records there. |
-| `update_record` | Changes fields of a record (`changes` is merged in, a null value removes a field), recomputes the quote hash and sets the record's provenance to the given one with today's date. A change to `claim` or `importance` is copied to every record of the claim, with `related` also in the other ledgers. Runs the checks of `add_record` on every affected ledger; nothing is written when one fails. |
+| `update_record` | Changes fields of a record (`changes` is merged in, a null value removes a field) and recomputes the quote hash. `provenance` records the original assessment and is not changed by edits. A change to `claim` or `importance` is copied to every record of the claim, with `related` also in the other ledgers. Runs the checks of `add_record` on every affected ledger; nothing is written when one fails. |
+| `update_records` | The batch form of `update_record` (also with `related`): `updates` is a list of `{"id", "changes"}` applied in order (later items see earlier ones). Every affected record is checked, all refusals are listed together with the item index and record id, and the ledgers are rewritten once or not at all. |
 | `move_record` | Moves a record, withdrawn ones too, to another ledger of the project, keeping its ID, claim ID and provenance. Refused when the ID already exists in the target or the record fails the checks of the target or the `related` ledgers. |
 | `get_record` | Returns one record by its ID. |
 | `find_records` | Finds records by `claim_id`, source `key` or claim `text`, or contestable records with `missing_evidence`. Filters combine; withdrawn records are left out unless `include_withdrawn` is set. |
@@ -109,7 +110,7 @@ A project may keep more than one ledger, for example one for the schema and one 
 
 1. `create_ledger` once per work, next to the manuscript or code.
 2. `add_record` whenever a source is cited, with the claim, its anchor, the source key, locator, quote, relation and justification. The server fills in IDs, the quote hash and the provenance date.
-3. `update_record` to correct a record (a quote, locator or claim wording) instead of withdrawing and re-adding it.
+3. `update_record`, or `update_records` for many corrections at once (for example fixing anchors), to correct records (a quote, locator or claim wording) instead of withdrawing and re-adding them. Provenance keeps the original assessment.
 4. `find_records` with `missing_evidence` and `validate_ledger` before submission, to find claims still lacking evidence.
 5. `check_ledger` with the rendered work, its bibliography and the sources (as text or public URLs), to catch anchors, keys and quotes that no longer match.
 6. `export_ledger`, `summarize_ledger` or `embed_ledger` at `masked` or `locator` level to share the ledger with co-authors, reviewers or a journal.

@@ -261,75 +261,104 @@ def move_record(path: str, id: str, to: str, related: list[str] | None = None) -
     return moved
 
 
-def update_record(
-    path: str,
-    id: str,
-    changes: Record,
-    provenance: dict[str, Any],
-    related: list[str] | None = None,
-) -> Record:
-    """Merge `changes` into a record (None removes a field), refresh its quote hash and
-    provenance, and copy `claim` or `importance` changes to the other records of the claim,
-    also in the `related` ledgers. Every check runs before any file is written; the related
-    ledgers are rewritten first and the edited ledger last."""
-    forbidden = [f for f in ("id", "withdrawn", "quote_hash", "provenance") if f in changes]
-    if forbidden:
-        raise ValueError(f"{', '.join(repr(f) for f in forbidden)} cannot be changed")
-    if not changes:
-        raise ValueError("No changes given")
+def update_records(
+    path: str, updates: list[dict[str, Any]], related: list[str] | None = None
+) -> list[Record]:
+    """Apply `updates` (each `{"id": ..., "changes": {...}}`) in order and rewrite the ledger once.
+
+    Each change is merged into the record (None removes a field) and refreshes its quote hash;
+    `claim` or `importance` changes are copied to the other records of the claim, also in the
+    `related` ledgers. The record's provenance stays as it was: it records the original
+    assessment. Later updates see earlier ones, a duplicate id is applied in order, and every
+    affected record is checked against the final state of all ledgers. All refusals are collected
+    into one ValueError, each prefixed with the item index and record id, and nothing is written
+    then. Otherwise the related ledgers that changed are rewritten first and the edited ledger
+    last. Returns, for each item, its record in the final state (so two items on one record
+    return the same, fully updated record)."""
+    return _update(path, updates, related, single=False)
+
+
+def _update(
+    path: str, updates: list[dict[str, Any]], related: list[str] | None, single: bool
+) -> list[Record]:
+    """Core of `update_records`; `single` drops the batch prefixes from the error message."""
+    if not updates:
+        raise ValueError("No updates given")
     header, records = read(path)
-    target = next((r for r in records if r.get("id") == id), None)
-    if target is None:
-        raise ValueError(f"No record {id} in {path}")
-    if "withdrawn" in target:
-        raise ValueError(f"{id} is withdrawn and cannot be changed")
-    updated: Record = {k: v for k, v in target.items() if k not in changes}
-    updated.update({k: v for k, v in changes.items() if v is not None})
-    if "quote" in changes:
-        if "quote" not in updated:
-            updated.pop("quote_hash", None)
-        elif updated["quote"] != target.get("quote"):
-            updated["quote_hash"] = quote_hash(updated["quote"])
-    updated["provenance"] = {**provenance, "date": date.today().isoformat()}
-    result = [updated if r is target else r for r in records]
-    claim_changes = {f: changes[f] for f in CLAIM_FIELDS if f in changes}
-
-    def propagate(rows: list[Record]) -> tuple[list[Record], list[Record]]:
-        rows = list(rows)
-        changed = []
-        for number, other in enumerate(rows):
-            if other is not updated and other.get("claim_id") == updated.get("claim_id"):
-                rows[number] = {k: v for k, v in other.items() if k not in claim_changes} | {
-                    k: v for k, v in claim_changes.items() if v is not None
-                }
-                changed.append(rows[number])
-        return rows, changed
-
-    changed = [updated]
-    if claim_changes:
-        result, more = propagate(result)
-        changed += more
-    # (path, header, rows, records to check) of every related ledger that holds the claim.
-    others: list[tuple[str, dict[str, Any], list[Record], list[Record]]] = []
-    seen = [path]
+    # (path, header, rows) of the edited ledger (index 0) and of every distinct related ledger.
+    ledgers: list[tuple[str, dict[str, Any], list[Record]]] = [(path, header, records)]
     for other_path in related or []:
-        if any(_same_file(other_path, s) for s in seen):
+        if any(_same_file(other_path, known) for known, _, _ in ledgers):
             continue
-        seen.append(other_path)
         other_header, rows = read(other_path)
-        rows, touched = propagate(rows) if claim_changes else (rows, [])
-        others.append((other_path, other_header, rows, touched))
-    everything = result + [r for _, _, rows, _ in others for r in rows]
-    for record in changed:
-        _check(header, record, [r for r in everything if r is not record])
-    for _, other_header, _rows, touched in others:
-        for record in touched:
-            _check(other_header, record, [r for r in everything if r is not record])
-    for other_path, other_header, rows, touched in others:
-        if touched:
-            _rewrite(other_path, other_header, rows)
-    _rewrite(path, header, result)
-    return updated
+        ledgers.append((other_path, other_header, rows))
+    errors: list[str] = []
+    touched: dict[tuple[int, str], int] = {}  # (ledger, record id) -> last update that changed it
+    applied: list[str | None] = []
+    for index, item in enumerate(updates):
+        prefix = "" if single else f"updates[{index}] ({item.get('id')}): "
+        applied.append(None)
+        id, changes = item.get("id"), item.get("changes")
+        if not isinstance(id, str) or not isinstance(changes, dict):
+            errors.append(prefix + "needs an 'id' string and a 'changes' object")
+            continue
+        forbidden = [f for f in ("id", "withdrawn", "quote_hash", "provenance") if f in changes]
+        if forbidden:
+            errors.append(prefix + f"{', '.join(repr(f) for f in forbidden)} cannot be changed")
+            continue
+        if not changes:
+            errors.append(prefix + "No changes given")
+            continue
+        position = next((n for n, r in enumerate(records) if r.get("id") == id), None)
+        if position is None:
+            errors.append(prefix + f"No record {id} in {path}")
+            continue
+        target = records[position]
+        if "withdrawn" in target:
+            errors.append(prefix + f"{id} is withdrawn and cannot be changed")
+            continue
+        updated: Record = {k: v for k, v in target.items() if k not in changes}
+        updated.update({k: v for k, v in changes.items() if v is not None})
+        if "quote" in changes:
+            if "quote" not in updated:
+                updated.pop("quote_hash", None)
+            elif updated["quote"] != target.get("quote"):
+                updated["quote_hash"] = quote_hash(updated["quote"])
+        records[position] = updated
+        touched[(0, id)] = index
+        applied[index] = id
+        if claim_changes := {f: changes[f] for f in CLAIM_FIELDS if f in changes}:
+            for ledger_number, (_, _, rows) in enumerate(ledgers):
+                for number, other in enumerate(rows):
+                    if other is not updated and other.get("claim_id") == updated.get("claim_id"):
+                        rows[number] = {
+                            k: v for k, v in other.items() if k not in claim_changes
+                        } | {k: v for k, v in claim_changes.items() if v is not None}
+                        touched[(ledger_number, str(other.get("id")))] = index
+    everything = [r for _, _, rows in ledgers for r in rows]
+    for (ledger_number, id), index in touched.items():
+        _, ledger_header, rows = ledgers[ledger_number]
+        record = next(r for r in rows if r.get("id") == id)
+        try:
+            _check(ledger_header, record, [r for r in everything if r is not record])
+        except ValueError as error:
+            errors.append(str(error) if single else f"updates[{index}] ({id}): {error}")
+    if errors:
+        if single:
+            raise ValueError(errors[0])
+        raise ValueError(f"{len(errors)} problem(s), nothing written: " + " | ".join(errors))
+    changed_ledgers = {ledger_number for ledger_number, _ in touched}
+    for ledger_number in [*range(1, len(ledgers)), 0]:
+        if ledger_number in changed_ledgers:
+            ledger_path, ledger_header, rows = ledgers[ledger_number]
+            _rewrite(ledger_path, ledger_header, rows)
+    by_id = {str(r.get("id")): r for r in records}
+    return [by_id[str(id)] for id in applied]
+
+
+def update_record(path: str, id: str, changes: Record, related: list[str] | None = None) -> Record:
+    """Merge `changes` into one record and return it; see `update_records`."""
+    return _update(path, [{"id": id, "changes": changes}], related, single=True)[0]
 
 
 def get_record(path: str, id: str) -> Record:

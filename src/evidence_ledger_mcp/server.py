@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from importlib.metadata import version
 from typing import Any, Literal
 
@@ -22,7 +22,8 @@ mcp = FastMCP(
     "`quote_prefix`, `quote_suffix`, `quote_focus`). Write every other field (`justification`, "
     "`locator`, `note`, and the header's `description` and `notes`) in your own words, because "
     "they are exported at every level; a run of 24 or more letters and digits from a quote there "
-    "blocks masked and locator exports, and `add_record` and `update_record` refuse it. "
+    "blocks masked and locator exports, and `add_record`, `update_record` and `update_records` "
+    "refuse it. "
     "When a tool fails or a result looks wrong (a valid record "
     "rejected, an export that fails its own validation, a check that blocks an export without "
     "a clear reason), stop and tell the user; do not work around it or edit the ledger by hand "
@@ -92,21 +93,34 @@ def add_record(
 
 @mcp.tool()
 def update_record(
-    path: str,
-    id: str,
-    changes: dict[str, Any],
-    provenance: dict[str, Any],
-    related: list[str] | None = None,
+    path: str, id: str, changes: dict[str, Any], related: list[str] | None = None
 ) -> Record:
     """Change fields of one record and return it. `changes` is merged into the record; a null
     value removes a field. `id`, `withdrawn`, `quote_hash` and `provenance` cannot be changed,
     and a withdrawn record cannot be edited. A new `quote` gets a new `quote_hash`; a removed one
-    drops it. The record's provenance becomes the given `provenance` with today's date. A
-    change to `claim` or `importance` is copied to every record with the same `claim_id`,
-    which keep their provenance; a claim may span related ledgers, so pass their paths as
-    `related` (the same list every time) to update its records there too. The same checks as
-    `add_record` apply to every affected ledger, and nothing is written when one fails."""
-    return ledger.update_record(path, id, changes, provenance, related)
+    drops it. The record's `provenance` is not touched: it records the original assessment (who,
+    which model, which manuscript revision, when), not later edits. A change to `claim` or
+    `importance` is copied to every record with the same `claim_id`; a claim may span related
+    ledgers, so pass their paths as `related` (the same list every time) to update its records
+    there too. The same checks as `add_record` apply to every affected ledger, and nothing is
+    written when one fails."""
+    return ledger.update_record(path, id, changes, related)
+
+
+@mcp.tool()
+def update_records(
+    path: str, updates: list[dict[str, Any]], related: list[str] | None = None
+) -> Sequence[Record]:
+    """Change fields of several records in one call and return each item's record in its final
+    state (two items on one record return the same, fully updated record).
+    `updates` is a list of `{"id": "R-0001", "changes": {...}}`; each `changes` works as in
+    `update_record`, and provenance stays as it was. Updates apply in order, so a later one sees
+    an earlier one (a duplicate id is allowed), and claim-level changes are copied to the claim's
+    other records, also in the `related` ledgers (pass the same list every time). Every affected
+    record is checked against the final state of all ledgers. If any item is refused, the error
+    lists all refusals, each prefixed with the item index and record id, and nothing is written;
+    otherwise the related ledgers are rewritten first and the edited ledger last."""
+    return ledger.update_records(path, updates, related)
 
 
 @mcp.tool()

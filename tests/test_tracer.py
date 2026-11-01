@@ -69,15 +69,26 @@ async def lifecycle(ledger: Path) -> None:
             path=path,
             id="R-0002",
             changes={"claim": "Keeping a ledger cut unchecked citations a lot.", "note": None},
-            provenance=PROVENANCE,
         )
         assert edited["id"] == "R-0002"
+        assert edited["provenance"] == second["provenance"]
+        batch = await call(
+            session,
+            "update_records",
+            path=path,
+            updates=[{"id": "R-0001", "changes": {"locator": {"page": 3}}}],
+        )
+        assert batch[0]["locator"] == {"page": 3}
         assert (await call(session, "get_record", path=path, id="R-0001"))["claim"] == (
             edited["claim"]
         )
         failed = await session.call_tool(
             "update_record",
-            {"path": path, "id": "R-0002", "changes": {"id": "R-0009"}, "provenance": PROVENANCE},
+            {"path": path, "id": "R-0002", "changes": {"id": "R-0009"}},
+        )
+        assert failed.isError
+        failed = await session.call_tool(
+            "update_records", {"path": path, "updates": [{"id": "R-0009", "changes": {"a": 1}}]}
         )
         assert failed.isError
 

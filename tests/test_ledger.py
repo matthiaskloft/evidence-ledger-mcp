@@ -350,22 +350,29 @@ def test_validate_ledger_reports_header_overlaps(path: str) -> None:
 
 
 def update(path: str, record_id: str, **changes: Any) -> dict[str, Any]:
-    return ledger.update_record(path, record_id, changes, {**PROVENANCE, "by": "Editor"})
+    return ledger.update_record(path, record_id, changes)
 
 
-def test_update_record_merges_and_refreshes_provenance(path: str) -> None:
-    add(path, note="Old note")
+def test_update_record_merges_and_keeps_provenance(path: str) -> None:
+    original = add(path, note="Old note")["provenance"]
     add(path, key="other")
     other_line = Path(path).read_text("utf-8").splitlines()[2]
     stored = update(path, "R-0001", locator={"page": 9}, note=None)
     assert stored["locator"] == {"page": 9}
     assert "note" not in stored
     assert (stored["id"], stored["claim_id"]) == ("R-0001", "C-0001")
-    assert stored["provenance"]["by"] == "Editor"
-    assert stored["provenance"]["date"]
+    assert stored["provenance"] == original
     assert ledger.get_record(path, "R-0001") == stored
     assert Path(path).read_text("utf-8").splitlines()[2] == other_line
     assert ledger.validate_ledger(path) == []
+
+
+def test_update_record_does_not_touch_an_old_provenance_date(path: str) -> None:
+    old = {**PROVENANCE, "date": "2020-01-02", "manuscript_rev": "v1"}
+    add(path)
+    rewrite_line(path, 1, {**ledger.read(path)[1][0], "provenance": old})
+    stored = update(path, "R-0001", note="Edited")
+    assert stored["provenance"] == old
 
 
 def test_update_record_quote_hash(path: str) -> None:
@@ -452,8 +459,95 @@ def test_update_record_rejections_write_nothing(
     ledger.withdraw_record(path, "R-0003", "Duplicate")
     before = Path(path).read_bytes()
     with pytest.raises(ValueError, match=match):
-        ledger.update_record(path, id, changes, PROVENANCE)
+        ledger.update_record(path, id, changes)
     assert Path(path).read_bytes() == before
+
+
+def test_update_records_applies_twenty_anchor_edits_at_once(path: str) -> None:
+    for number in range(20):
+        add(path, key=f"s{number}", claim=f"Claim {number}.", anchor={"exact": f"old {number}"})
+    before = ledger.read(path)[1]
+    updates = [
+        {"id": f"R-{n + 1:04d}", "changes": {"anchor": {"exact": f"new {n}"}}} for n in range(20)
+    ]
+    stored = ledger.update_records(path, updates)
+    assert [r["anchor"]["exact"] for r in stored] == [f"new {n}" for n in range(20)]
+    after = ledger.read(path)[1]
+    assert [r["anchor"]["exact"] for r in after] == [f"new {n}" for n in range(20)]
+    assert [r["provenance"] for r in after] == [r["provenance"] for r in before]
+    assert ledger.validate_ledger(path) == []
+
+
+def test_update_records_reports_every_refusal_and_writes_nothing(path: str) -> None:
+    add(path)
+    add(path, key="other", claim="Another claim.")
+    before = Path(path).read_bytes()
+    updates = [
+        {"id": "R-0001", "changes": {"note": "fine"}},
+        {"id": "R-0002", "changes": {"claim_type": "nonsense"}},
+        {"id": "R-0009", "changes": {"note": "x"}},
+    ]
+    with pytest.raises(ValueError) as error:
+        ledger.update_records(path, updates)
+    message = str(error.value)
+    assert "updates[1] (R-0002): Invalid record" in message
+    assert "updates[2] (R-0009): No record R-0009" in message
+    assert "updates[0]" not in message
+    assert Path(path).read_bytes() == before
+
+
+def test_update_records_apply_in_order(path: str) -> None:
+    add(path)
+    stored = ledger.update_records(
+        path,
+        [
+            {"id": "R-0001", "changes": {"note": "first"}},
+            {"id": "R-0001", "changes": {"note": "second", "locator": {"page": 4}}},
+        ],
+    )
+    assert [r["note"] for r in stored] == ["second", "second"]
+    assert ledger.get_record(path, "R-0001")["locator"] == {"page": 4}
+    # Order matters: the last update to a field wins.
+    ledger.update_records(
+        path,
+        [
+            {"id": "R-0001", "changes": {"note": None}},
+            {"id": "R-0001", "changes": {"note": "back"}},
+        ],
+    )
+    assert ledger.get_record(path, "R-0001")["note"] == "back"
+    ledger.update_records(
+        path,
+        [
+            {"id": "R-0001", "changes": {"note": "x"}},
+            {"id": "R-0001", "changes": {"note": None}},
+        ],
+    )
+    assert "note" not in ledger.get_record(path, "R-0001")
+
+
+def test_update_records_propagate_claim_changes_within_a_batch(path: str) -> None:
+    add(path)
+    add(path, claim_id="C-0001", key="other")
+    ledger.update_records(
+        path,
+        [
+            {"id": "R-0001", "changes": {"claim": "Reworded claim."}},
+            {"id": "R-0002", "changes": {"note": "sees the new claim"}},
+        ],
+    )
+    claims = {r["id"]: r["claim"] for r in ledger.read(path)[1]}
+    assert claims == {"R-0001": "Reworded claim.", "R-0002": "Reworded claim."}
+    # A later claim edit on a sibling in the same batch wins for the whole claim.
+    ledger.update_records(
+        path,
+        [
+            {"id": "R-0001", "changes": {"claim": "One."}},
+            {"id": "R-0002", "changes": {"claim": "Two."}},
+        ],
+    )
+    assert {r["claim"] for r in ledger.read(path)[1]} == {"Two."}
+    assert ledger.validate_ledger(path) == []
 
 
 def test_update_record_checks_header_overlap(tmp_path: Path) -> None:
@@ -465,7 +559,7 @@ def test_update_record_checks_header_overlap(tmp_path: Path) -> None:
             "id": "R-0001",
             "claim_id": "C-0001",
             "quote_hash": README_HASH,
-            "provenance": PROVENANCE,
+            "provenance": {**PROVENANCE, "date": "2026-01-01"},
         }
     )
     Path(target).write_text(Path(target).read_text("utf-8") + line + "\n", "utf-8")
@@ -623,7 +717,7 @@ def test_add_record_checks_claim_agreement_across_related(pair: tuple[str, str])
 def test_update_record_copies_claim_changes_to_related(pair: tuple[str, str]) -> None:
     first, second = split_claim(pair)
     old = ledger.get_record(second, "R-0002")["provenance"]
-    ledger.update_record(first, "R-0001", {"claim": "New wording."}, PROVENANCE, [second])
+    ledger.update_record(first, "R-0001", {"claim": "New wording."}, [second])
     assert ledger.get_record(first, "R-0001")["claim"] == "New wording."
     other = ledger.get_record(second, "R-0002")
     assert other["claim"] == "New wording."
@@ -638,26 +732,51 @@ def test_update_record_failing_check_writes_no_file(pair: tuple[str, str]) -> No
     rewrite_line(first, 0, {"ledger": {**ledger.read(first)[0], "notes": RECORD["quote"]}})
     before = snapshot(first, second)
     with pytest.raises(ValueError, match=r"header\.notes"):
-        ledger.update_record(first, "R-0001", {"claim": "New wording."}, PROVENANCE, [second])
+        ledger.update_record(first, "R-0001", {"claim": "New wording."}, [second])
     assert snapshot(first, second) == before
     # The related ledger's header makes the copied record fail there.
     rewrite_line(first, 0, {"ledger": ledger.read(first)[0] | {"notes": "Own words."}})
     rewrite_line(second, 0, {"ledger": {**ledger.read(second)[0], "notes": RECORD["quote"]}})
     before = snapshot(first, second)
     with pytest.raises(ValueError, match=r"header\.notes"):
-        ledger.update_record(first, "R-0001", {"claim": "New wording."}, PROVENANCE, [second])
+        ledger.update_record(first, "R-0001", {"claim": "New wording."}, [second])
     assert snapshot(first, second) == before
 
 
 def test_update_record_without_related_leaves_other_ledger(pair: tuple[str, str]) -> None:
     first, second = split_claim(pair)
     before = snapshot(second)
-    ledger.update_record(first, "R-0001", {"claim": "New wording."}, PROVENANCE)
+    ledger.update_record(first, "R-0001", {"claim": "New wording."})
     assert snapshot(second) == before
     assert ledger.validate_ledger(first) == []
     assert ledger.validate_ledger(second, [first]) == [
         "C-0001: records disagree on claim text across related ledgers"
     ]
+
+
+def test_update_records_batch_propagates_claim_to_related(pair: tuple[str, str]) -> None:
+    first, second = split_claim(pair)
+    result = ledger.update_records(
+        first, [{"id": "R-0001", "changes": {"claim": "New wording."}}], [second]
+    )
+    assert result[0]["claim"] == "New wording."
+    assert ledger.get_record(second, "R-0002")["claim"] == "New wording."
+    assert ledger.validate_ledger(first, [second]) == []
+
+
+def test_update_records_bad_item_writes_neither_file(pair: tuple[str, str]) -> None:
+    first, second = split_claim(pair)
+    before = snapshot(first, second)
+    with pytest.raises(ValueError, match=r"nothing written.*updates\[1\] \(R-0999\)"):
+        ledger.update_records(
+            first,
+            [
+                {"id": "R-0001", "changes": {"claim": "New wording."}},
+                {"id": "R-0999", "changes": {"note": "x"}},
+            ],
+            [second],
+        )
+    assert snapshot(first, second) == before
 
 
 def test_validate_reports_drift_across_related(pair: tuple[str, str]) -> None:

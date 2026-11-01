@@ -596,3 +596,87 @@ def test_validate_ledger_reports_ids_shared_with_related(pair: tuple[str, str]) 
     assert ledger.validate_ledger(first, [second]) == [f"R-0001: id also used in {second}"]
     assert ledger.validate_ledger(second, [first]) == [f"R-0001: id also used in {first}"]
     assert ledger.validate_ledger(first, [first]) == []
+
+
+def split_claim(pair: tuple[str, str]) -> tuple[str, str]:
+    """Two records on C-0001, one moved to the second ledger."""
+    first, second = pair
+    add_related(first, [second])
+    add_related(first, [second], claim_id="C-0001")
+    ledger.move_record(first, "R-0002", second)
+    return first, second
+
+
+def test_add_record_checks_claim_agreement_across_related(pair: tuple[str, str]) -> None:
+    first, second = split_claim(pair)
+    before = snapshot(first, second)
+    for changes, match in [
+        ({"claim": "A different wording."}, "claim differs from R-000. on C-0001"),
+        ({"importance": "critical"}, "importance differs from R-000. on C-0001"),
+    ]:
+        with pytest.raises(ValueError, match=match):
+            add_related(first, [second], claim_id="C-0001", **changes)
+        assert snapshot(first, second) == before
+    assert add_related(first, [second], claim_id="C-0001")["id"] == "R-0003"
+
+
+def test_update_record_copies_claim_changes_to_related(pair: tuple[str, str]) -> None:
+    first, second = split_claim(pair)
+    old = ledger.get_record(second, "R-0002")["provenance"]
+    ledger.update_record(first, "R-0001", {"claim": "New wording."}, PROVENANCE, [second])
+    assert ledger.get_record(first, "R-0001")["claim"] == "New wording."
+    other = ledger.get_record(second, "R-0002")
+    assert other["claim"] == "New wording."
+    assert other["provenance"] == old
+    assert ledger.validate_ledger(first, [second]) == []
+    assert ledger.validate_ledger(second, [first]) == []
+
+
+def test_update_record_failing_check_writes_no_file(pair: tuple[str, str]) -> None:
+    first, second = split_claim(pair)
+    # The edited ledger's header repeats the quote, so the edited record fails.
+    rewrite_line(first, 0, {"ledger": {**ledger.read(first)[0], "notes": RECORD["quote"]}})
+    before = snapshot(first, second)
+    with pytest.raises(ValueError, match=r"header\.notes"):
+        ledger.update_record(first, "R-0001", {"claim": "New wording."}, PROVENANCE, [second])
+    assert snapshot(first, second) == before
+    # The related ledger's header makes the copied record fail there.
+    rewrite_line(first, 0, {"ledger": ledger.read(first)[0] | {"notes": "Own words."}})
+    rewrite_line(second, 0, {"ledger": {**ledger.read(second)[0], "notes": RECORD["quote"]}})
+    before = snapshot(first, second)
+    with pytest.raises(ValueError, match=r"header\.notes"):
+        ledger.update_record(first, "R-0001", {"claim": "New wording."}, PROVENANCE, [second])
+    assert snapshot(first, second) == before
+
+
+def test_update_record_without_related_leaves_other_ledger(pair: tuple[str, str]) -> None:
+    first, second = split_claim(pair)
+    before = snapshot(second)
+    ledger.update_record(first, "R-0001", {"claim": "New wording."}, PROVENANCE)
+    assert snapshot(second) == before
+    assert ledger.validate_ledger(first) == []
+    assert ledger.validate_ledger(second, [first]) == [
+        "C-0001: records disagree on claim text across related ledgers"
+    ]
+
+
+def test_validate_reports_drift_across_related(pair: tuple[str, str]) -> None:
+    first, second = split_claim(pair)
+    rewrite_line(
+        second, 1, {**ledger.read(second)[1][0], "claim": "Drifted.", "importance": "critical"}
+    )
+    assert ledger.validate_ledger(second) == []
+    assert ledger.validate_ledger(first, [second]) == [
+        "C-0001: records disagree on claim text across related ledgers",
+        "C-0001: records disagree on importance across related ledgers",
+    ]
+
+
+def test_without_related_claims_are_checked_per_ledger(pair: tuple[str, str]) -> None:
+    first, _second = split_claim(pair)
+    third = str(Path(first).with_name("third.jsonl"))
+    ledger.create_ledger(third, WORK)
+    stored = add(third, claim_id="C-0001", claim="Another wording.")
+    assert stored["claim_id"] == "C-0001"
+    assert ledger.validate_ledger(third) == []
+    assert ledger.validate_ledger(third, [first]) != []

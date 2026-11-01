@@ -86,13 +86,13 @@ Pass absolute ledger paths to tools; relative paths resolve against the server's
 | --- | --- |
 | `schema_info` | Reports the server version and the supported schema version. |
 | `create_ledger` | Creates a JSON Lines ledger with a header; `work` needs `title` and `type`. |
-| `add_record` | Validates and appends a record, refusing one whose `claim` or `importance` differs from another record of the same claim; takes the record and a separate `provenance` object and returns the stored record. With `related`, IDs are numbered past those of the other ledgers. |
-| `update_record` | Changes fields of a record (`changes` is merged in, a null value removes a field), recomputes the quote hash and sets the record's provenance to the given one with today's date. A change to `claim` or `importance` is copied to every record of the claim. Runs the checks of `add_record`; nothing is written when one fails. |
-| `move_record` | Moves a record, withdrawn ones too, to another ledger of the project, keeping its ID, claim ID and provenance. Refused when the ID already exists in the target or the record fails the target's checks. |
+| `add_record` | Validates and appends a record, refusing one whose `claim` or `importance` differs from another record of the same claim; takes the record and a separate `provenance` object and returns the stored record. With `related`, IDs are numbered past those of the other ledgers and the claim must agree with its records there. |
+| `update_record` | Changes fields of a record (`changes` is merged in, a null value removes a field), recomputes the quote hash and sets the record's provenance to the given one with today's date. A change to `claim` or `importance` is copied to every record of the claim, with `related` also in the other ledgers. Runs the checks of `add_record` on every affected ledger; nothing is written when one fails. |
+| `move_record` | Moves a record, withdrawn ones too, to another ledger of the project, keeping its ID, claim ID and provenance. Refused when the ID already exists in the target or the record fails the checks of the target or the `related` ledgers. |
 | `get_record` | Returns one record by its ID. |
 | `find_records` | Finds records by `claim_id`, source `key` or claim `text`, or contestable records with `missing_evidence`. Filters combine; withdrawn records are left out unless `include_withdrawn` is set. |
 | `validate_record` | Checks one record against the schema without writing it. |
-| `validate_ledger` | Checks a whole ledger and lists the problems found, including records of one claim that disagree on claim text or importance and, with `related`, IDs also used in another ledger. |
+| `validate_ledger` | Checks a whole ledger and lists the problems found, including records of one claim that disagree on claim text or importance and, with `related`, IDs also used in another ledger and claims whose records disagree across the ledgers. |
 | `withdraw_record` | Marks a record withdrawn, with a reason, instead of deleting it. |
 | `export_ledger` | Writes the ledger as JSON or JSON Lines at a chosen level to a new file. |
 | `summarize_ledger` | Writes a standalone HTML summary grouped by claim to a new file. |
@@ -103,7 +103,7 @@ Pass absolute ledger paths to tools; relative paths resolve against the server's
 
 ### Several ledgers per project
 
-A project may keep more than one ledger, for example one for the schema and one for the server. The schema fixes IDs as `R-0001` and `C-0001`, so per-ledger prefixes would need an upstream schema change; instead the IDs stay unique across the project's ledgers. Pass the other ledgers' paths as `related` to `add_record` and `validate_ledger` every time, and use `move_record` to move a record from one ledger to another. A moved ID is not reused.
+A project may keep more than one ledger, for example one for the schema and one for the server. The schema fixes IDs as `R-0001` and `C-0001`, so per-ledger prefixes would need an upstream schema change; instead the IDs stay unique across the project's ledgers. Pass the other ledgers' paths as `related` to `add_record`, `update_record`, `move_record` and `validate_ledger` every time, and use `move_record` to move a record from one ledger to another. A moved ID is not reused. A claim may then span related ledgers (a claim split by a move has records in both) and stays consistent as long as `related` is passed: `add_record` and `move_record` refuse a record whose claim text or importance differs from the claim's records in any related ledger, `update_record` copies a claim-level change to all of them, and `validate_ledger` reports a claim whose records disagree across ledgers.
 
 ### Typical workflow
 

@@ -221,7 +221,9 @@ def add_record(
     path: str, record: Record, provenance: dict[str, Any], related: list[str] | None = None
 ) -> Record:
     """Complete a record (id, claim_id, quote_hash, provenance date), validate and append it.
-    New ids and claim ids are numbered past those of this ledger and every `related` ledger."""
+    New ids and claim ids are numbered past those of this ledger and every `related` ledger,
+    and the record must agree on claim text and importance with the records of its claim in
+    all of them."""
     for field in ("id", "withdrawn"):
         if field in record:
             raise ValueError(f"'{field}' is assigned by the server and cannot be supplied")
@@ -234,14 +236,16 @@ def add_record(
     elif "quote_hash" in new:
         raise ValueError("'quote_hash' without 'quote' cannot be checked")
     new["provenance"] = {**provenance, "date": date.today().isoformat()}
-    _check(header, new, existing)
+    _check(header, new, taken)
     _append(path, new)
     return new
 
 
-def move_record(path: str, id: str, to: str) -> Record:
+def move_record(path: str, id: str, to: str, related: list[str] | None = None) -> Record:
     """Move a record (withdrawn ones too) to another ledger, keeping its id, claim_id and
-    provenance. The record is appended to `to` first, then removed from `path`."""
+    provenance. It must agree on claim text and importance with the records of its claim in `to`
+    and in the `related` ledgers. The record is appended to `to` first, then removed from
+    `path`."""
     if _same_file(path, to):
         raise ValueError("Source and target are the same ledger")
     header, records = read(path)
@@ -251,15 +255,23 @@ def move_record(path: str, id: str, to: str) -> Record:
     to_header, to_records = read(to)
     if any(r.get("id") == id for r in to_records):
         raise ValueError(f"{id} already exists in {to}")
-    _check(to_header, moved, to_records)
+    _check(to_header, moved, to_records + _others(to, related))
     _append(to, moved)
     _rewrite(path, header, [r for r in records if r is not moved])
     return moved
 
 
-def update_record(path: str, id: str, changes: Record, provenance: dict[str, Any]) -> Record:
+def update_record(
+    path: str,
+    id: str,
+    changes: Record,
+    provenance: dict[str, Any],
+    related: list[str] | None = None,
+) -> Record:
     """Merge `changes` into a record (None removes a field), refresh its quote hash and
-    provenance, and copy `claim` or `importance` changes to the other records of the claim."""
+    provenance, and copy `claim` or `importance` changes to the other records of the claim,
+    also in the `related` ledgers. Every check runs before any file is written; the related
+    ledgers are rewritten first and the edited ledger last."""
     forbidden = [f for f in ("id", "withdrawn", "quote_hash", "provenance") if f in changes]
     if forbidden:
         raise ValueError(f"{', '.join(repr(f) for f in forbidden)} cannot be changed")
@@ -280,16 +292,42 @@ def update_record(path: str, id: str, changes: Record, provenance: dict[str, Any
             updated["quote_hash"] = quote_hash(updated["quote"])
     updated["provenance"] = {**provenance, "date": date.today().isoformat()}
     result = [updated if r is target else r for r in records]
-    changed = [updated]
-    if claim_changes := {f: changes[f] for f in CLAIM_FIELDS if f in changes}:
-        for number, other in enumerate(result):
+    claim_changes = {f: changes[f] for f in CLAIM_FIELDS if f in changes}
+
+    def propagate(rows: list[Record]) -> tuple[list[Record], list[Record]]:
+        rows = list(rows)
+        changed = []
+        for number, other in enumerate(rows):
             if other is not updated and other.get("claim_id") == updated.get("claim_id"):
-                result[number] = {k: v for k, v in other.items() if k not in claim_changes} | {
+                rows[number] = {k: v for k, v in other.items() if k not in claim_changes} | {
                     k: v for k, v in claim_changes.items() if v is not None
                 }
-                changed.append(result[number])
+                changed.append(rows[number])
+        return rows, changed
+
+    changed = [updated]
+    if claim_changes:
+        result, more = propagate(result)
+        changed += more
+    # (path, header, rows, records to check) of every related ledger that holds the claim.
+    others: list[tuple[str, dict[str, Any], list[Record], list[Record]]] = []
+    seen = [path]
+    for other_path in related or []:
+        if any(_same_file(other_path, s) for s in seen):
+            continue
+        seen.append(other_path)
+        other_header, rows = read(other_path)
+        rows, touched = propagate(rows) if claim_changes else (rows, [])
+        others.append((other_path, other_header, rows, touched))
+    everything = result + [r for _, _, rows, _ in others for r in rows]
     for record in changed:
-        _check(header, record, [r for r in result if r is not record])
+        _check(header, record, [r for r in everything if r is not record])
+    for _, other_header, _rows, touched in others:
+        for record in touched:
+            _check(other_header, record, [r for r in everything if r is not record])
+    for other_path, other_header, rows, touched in others:
+        if touched:
+            _rewrite(other_path, other_header, rows)
     _rewrite(path, header, result)
     return updated
 
@@ -331,7 +369,8 @@ def find_records(
 
 def validate_ledger(path: str, related: list[str] | None = None) -> list[str]:
     """Return all problems found in the ledger, empty if it is valid. With `related` ledgers,
-    also report ids this ledger shares with them."""
+    also report ids this ledger shares with them and claims whose records here and there
+    disagree on claim text or importance."""
     lines = _lines(path)
     header = _header(lines[0]) if lines else None
     if header is None:
@@ -410,13 +449,31 @@ def validate_ledger(path: str, related: list[str] | None = None) -> list[str]:
         for claim, texts in claims.items()
         if len(texts) > 1
     ]
+    own_claims = {k: len(v) for k, v in claims.items()}
+    own_importance = {k: len(v) for k, v in importance.items()}
+    shared: set[str] = set()
     for other in related or []:
         if _same_file(path, other):
             continue
-        used = {r.get("id") for r in read(other)[1]}
+        rows = read(other)[1]
+        used = {r.get("id") for r in rows}
         problems += [
             f"{label}: id also used in {other}" for label in sorted(seen_ids & used, key=str)
         ]
+        for row in rows:
+            claim_id = str(row.get("claim_id"))
+            if claim_id not in own_claims and claim_id not in own_importance:
+                continue
+            shared.add(claim_id)
+            if isinstance(row.get("claim"), str):
+                claims.setdefault(claim_id, set()).add(row["claim"])
+            if isinstance(row.get("importance"), str | None):
+                importance.setdefault(claim_id, set()).add(row.get("importance"))
+    for claim in sorted(shared):
+        if len(claims.get(claim, ())) > max(1, own_claims.get(claim, 0)):
+            problems.append(f"{claim}: records disagree on claim text across related ledgers")
+        if len(importance.get(claim, ())) > max(1, own_importance.get(claim, 0)):
+            problems.append(f"{claim}: records disagree on importance across related ledgers")
     return problems
 
 

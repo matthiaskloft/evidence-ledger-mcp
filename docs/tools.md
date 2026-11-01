@@ -2,6 +2,12 @@
 
 Details of the tools listed in the [README](../README.md#tools).
 
+## Importing older ledgers
+
+`import_ledger(source, path, work=None)` turns a ledger kept as YAML or JSON (schema 0.2 to 0.4) into a JSON Lines ledger at `path`, which must not exist; the source is never changed. A `.yaml` or `.yml` source is read as YAML, anything else as JSON. The source is either an object `{"ledger": header, "records": [...]}` or a plain list of records; a plain list has no header, so `work` (`title` and `type`) is required, and a source that has a header must not be given `work`.
+
+The header keeps its fields and gets this server's `schema_version`, and `created` is set to today if missing. Records keep their `id`, `claim_id`, provenance (including its `date`) and `quote_hash`, so an older `sha256-n1` hash stays valid. YAML dates written without quotes are converted back to ISO strings. A record without `id` or `claim_id` gets the next free number; a record with a quote and no hash gets an `sha256-n2` hash. Records that fail validation are still written, so that they can be fixed afterwards; the result holds `path`, `records` and `problems`, the list `validate_ledger` returns. A header that fails the schema is an error and nothing is written. Later `add_record` calls continue the numbering after the highest imported id.
+
 ## Exports and summaries
 
 `export_ledger` defaults to `level="full"`, `format="jsonl"` and excluding withdrawn records. Keep full exports private. Use `level="masked"` with optional `max_words` (1–25) for excerpts, or `level="locator"` to remove quoted source text. Exports retain other record metadata, including `note` and header `notes`, and always remove `locator.chunk`. A publication check rejects copied source text in other metadata at masked and locator levels; it does not replace publication approval. The output must be a new file.

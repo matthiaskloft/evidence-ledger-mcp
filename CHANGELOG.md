@@ -4,6 +4,10 @@ Changes to the MCP server package `evidence-ledger-mcp`. Schema changes are rele
 
 ## [Unreleased]
 
+### Added
+
+- `import_ledger` writes a ledger kept as YAML or JSON (schema 0.2 to 0.4, with or without a header) as a new JSON Lines ledger, keeping ids, claim ids, provenance and quote hashes, and reports the problems `validate_ledger` finds in it (#49). PyYAML is now a runtime dependency.
+
 ## [0.4.0] - 2026-10-31
 
 ### Added

@@ -86,6 +86,7 @@ Pass absolute ledger paths to tools; relative paths resolve against the server's
 | --- | --- |
 | `schema_info` | Reports the server version and the supported schema version. |
 | `create_ledger` | Creates a JSON Lines ledger with a header; `work` needs `title` and `type`. |
+| `import_ledger` | Imports an older ledger (YAML or JSON, schema 0.2 to 0.4) as a new JSON Lines ledger, keeping ids, provenance and quote hashes, and reports what fails validation. |
 | `add_record` | Validates and appends a record; takes the record and a separate `provenance` object and returns the stored record. |
 | `get_record` | Returns one record by its ID. |
 | `find_records` | Finds records by `claim_id`, source `key` or claim `text`, or contestable records with `missing_evidence`. Filters combine; withdrawn records are left out unless `include_withdrawn` is set. |
@@ -102,6 +103,7 @@ Pass absolute ledger paths to tools; relative paths resolve against the server's
 ### Typical workflow
 
 1. `create_ledger` once per work, next to the manuscript or code.
+   For a ledger kept in an older YAML or JSON file, `import_ledger` once instead; it never changes the source.
 2. `add_record` whenever a source is cited, with the claim, its anchor, the source key, locator, quote, relation and justification. The server fills in IDs, the quote hash and the provenance date.
 3. `find_records` with `missing_evidence` and `validate_ledger` before submission, to find claims still lacking evidence.
 4. `check_ledger` with the rendered work, its bibliography and the sources (as text or public URLs), to catch anchors, keys and quotes that no longer match.

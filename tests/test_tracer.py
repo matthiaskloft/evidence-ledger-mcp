@@ -84,7 +84,7 @@ def test_ledger_lifecycle_over_stdio(tmp_path: Path) -> None:
     anyio.run(lifecycle, tmp_path / "ledger.jsonl")
 
 
-def test_server_instructions_point_to_bug_report_without_self_filing() -> None:
+def test_server_instructions_point_to_bug_report_and_require_review_before_filing() -> None:
     from evidence_ledger_mcp.server import mcp
 
     text = mcp.instructions or ""
@@ -92,7 +92,9 @@ def test_server_instructions_point_to_bug_report_without_self_filing() -> None:
     for phrase in (
         "stop and tell the user",
         "edit the ledger by hand",
-        "never file it yourself",
+        "only after the user has reviewed the full draft",
+        "never file or comment without that approval",
+        "search the open and closed issues",
         "invented record",
         "never real quotes, claims, justifications or work titles",
         "absolute paths, usernames and credentials",

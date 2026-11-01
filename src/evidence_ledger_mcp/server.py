@@ -22,7 +22,8 @@ mcp = FastMCP(
     "`quote_prefix`, `quote_suffix`, `quote_focus`). Write every other field (`justification`, "
     "`locator`, `note`, and the header's `description` and `notes`) in your own words, because "
     "they are exported at every level; a run of 24 or more letters and digits from a quote there "
-    "blocks masked and locator exports, and `add_record` and `update_record` refuse it. "
+    "blocks masked and locator exports, and `add_record`, `update_record` and `update_records` "
+    "refuse it. "
     "When a tool fails or a result looks wrong (a valid record "
     "rejected, an export that fails its own validation, a check that blocks an export without "
     "a clear reason), stop and tell the user; do not work around it or edit the ledger by hand "
@@ -96,7 +97,8 @@ def update_record(path: str, id: str, changes: dict[str, Any]) -> Record:
 
 @mcp.tool()
 def update_records(path: str, updates: list[dict[str, Any]]) -> Sequence[Record]:
-    """Change fields of several records in one call and return the updated record of each item.
+    """Change fields of several records in one call and return each item's record in its final
+    state (two items on one record return the same, fully updated record).
     `updates` is a list of `{"id": "R-0001", "changes": {...}}`; each `changes` works as in
     `update_record`, and provenance stays as it was. Updates apply in order, so a later one sees
     an earlier one (a duplicate id is allowed), and claim-level changes are copied to the claim's

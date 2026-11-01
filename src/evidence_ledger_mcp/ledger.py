@@ -226,7 +226,13 @@ def update_records(path: str, updates: list[dict[str, Any]]) -> list[Record]:
     provenance stays as it was: it records the original assessment. Later updates see earlier
     ones, a duplicate id is applied in order, and every affected record is checked against the
     final state. All refusals are collected into one ValueError, each prefixed with the item
-    index and record id, and nothing is written then. Returns the updated record of each item."""
+    index and record id, and nothing is written then. Returns, for each item, its record in the
+    final state (so two items on one record return the same, fully updated record)."""
+    return _update(path, updates, single=False)
+
+
+def _update(path: str, updates: list[dict[str, Any]], single: bool) -> list[Record]:
+    """Core of `update_records`; `single` drops the batch prefixes from the error message."""
     if not updates:
         raise ValueError("No updates given")
     header, records = read(path)
@@ -234,7 +240,7 @@ def update_records(path: str, updates: list[dict[str, Any]]) -> list[Record]:
     touched: dict[str, int] = {}  # record id -> index of the last update that changed it
     applied: list[str | None] = []
     for index, item in enumerate(updates):
-        prefix = f"updates[{index}] ({item.get('id')}): "
+        prefix = "" if single else f"updates[{index}] ({item.get('id')}): "
         applied.append(None)
         id, changes = item.get("id"), item.get("changes")
         if not isinstance(id, str) or not isinstance(changes, dict):
@@ -277,8 +283,10 @@ def update_records(path: str, updates: list[dict[str, Any]]) -> list[Record]:
         try:
             _check(header, record, [r for r in records if r is not record])
         except ValueError as error:
-            errors.append(f"updates[{index}] ({id}): {error}")
+            errors.append(str(error) if single else f"updates[{index}] ({id}): {error}")
     if errors:
+        if single:
+            raise ValueError(errors[0])
         raise ValueError(f"{len(errors)} problem(s), nothing written: " + " | ".join(errors))
     _rewrite(path, header, records)
     by_id = {str(r.get("id")): r for r in records}
@@ -286,8 +294,8 @@ def update_records(path: str, updates: list[dict[str, Any]]) -> list[Record]:
 
 
 def update_record(path: str, id: str, changes: Record) -> Record:
-    """Merge `changes` into one record; see `update_records`."""
-    return update_records(path, [{"id": id, "changes": changes}])[0]
+    """Merge `changes` into one record and return it; see `update_records`."""
+    return _update(path, [{"id": id, "changes": changes}], single=True)[0]
 
 
 def get_record(path: str, id: str) -> Record:

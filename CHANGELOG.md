@@ -16,6 +16,7 @@ Changes to the MCP server package `evidence-ledger-mcp`. Schema changes are rele
 ### Changed
 
 - `add_record` refuses a record whose `claim` differs from another record on the same `claim_id`, as it already did for `importance`, and `validate_ledger` reports `C-xxxx: records disagree on claim text` (#51).
+- Server instructions let an agent file a bug report or comment on an existing issue itself, but only after the user has reviewed the full draft and approved it, and after searching the open and closed issues and the roadmap for a duplicate. Before, they said never to file it.
 
 ## [0.4.0] - 2026-10-31
 

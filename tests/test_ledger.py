@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 from typing import Any
 
@@ -799,3 +800,62 @@ def test_without_related_claims_are_checked_per_ledger(pair: tuple[str, str]) ->
     assert stored["claim_id"] == "C-0001"
     assert ledger.validate_ledger(third) == []
     assert ledger.validate_ledger(third, [first]) != []
+
+
+def fail_second_replace(monkeypatch: pytest.MonkeyPatch) -> None:
+    real = os.replace
+    calls: list[int] = []
+
+    def flaky(src: Any, dst: Any) -> None:
+        calls.append(1)
+        if len(calls) == 2:
+            raise OSError("disk full")
+        real(src, dst)
+
+    monkeypatch.setattr(os, "replace", flaky)
+
+
+def test_update_records_write_error_restores_all_files(
+    pair: tuple[str, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    first, second = split_claim(pair)
+    before = snapshot(first, second)
+    fail_second_replace(monkeypatch)
+    with pytest.raises(OSError, match="disk full"):
+        ledger.update_records(
+            first, [{"id": "R-0001", "changes": {"claim": "New wording."}}], [second]
+        )
+    assert snapshot(first, second) == before
+    assert not list(Path(first).parent.glob("*.tmp"))
+
+
+def test_move_record_write_error_leaves_no_duplicate(
+    pair: tuple[str, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    first, second = pair
+    add_related(first, [second])
+    before = snapshot(first, second)
+    fail_second_replace(monkeypatch)
+    with pytest.raises(OSError, match="disk full"):
+        ledger.move_record(first, "R-0001", second)
+    assert snapshot(first, second) == before
+    assert not list(Path(first).parent.glob("*.tmp"))
+
+
+def test_update_records_names_every_item_touching_a_failing_record(
+    pair: tuple[str, str],
+) -> None:
+    first, second = split_claim(pair)
+    rewrite_line(first, 0, {"ledger": {**ledger.read(first)[0], "notes": RECORD["quote"]}})
+    before = snapshot(first, second)
+    with pytest.raises(ValueError, match=r"updates\[0, 1, 2\] \(R-0001\)"):
+        ledger.update_records(
+            first,
+            [
+                {"id": "R-0001", "changes": {"claim": "One."}},
+                {"id": "R-0001", "changes": {"claim": "Two."}},
+                {"id": "R-0001", "changes": {"claim": "Three."}},
+            ],
+            [second],
+        )
+    assert snapshot(first, second) == before

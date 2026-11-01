@@ -119,7 +119,8 @@ def update_records(
     other records, also in the `related` ledgers (pass the same list every time). Every affected
     record is checked against the final state of all ledgers. If any item is refused, the error
     lists all refusals, each prefixed with the item index and record id, and nothing is written;
-    otherwise the related ledgers are rewritten first and the edited ledger last."""
+    otherwise the changed ledgers are rewritten together, related ones first and the edited one
+    last: all files or none (on a write error the files already replaced are restored)."""
     return ledger.update_records(path, updates, related)
 
 
@@ -130,8 +131,9 @@ def move_record(path: str, id: str, to: str, related: list[str] | None = None) -
     file, the id is missing from `path` or already used in `to`, or the record fails the checks
     of `add_record` against `to` and the `related` ledgers (header text, claim text or
     importance of its claim). The claim may then span both ledgers: pass the project's other
-    ledgers as `related` to later calls so it stays consistent. The record is written to `to`
-    first, then removed from `path`; the id is not reused."""
+    ledgers as `related` to later calls so it stays consistent. Both files are rewritten
+    together, `to` first, all or none (on a write error the one already replaced is restored).
+    The id is not reused as long as `related` lists every ledger of the project each time."""
     return ledger.move_record(path, id, to, related)
 
 

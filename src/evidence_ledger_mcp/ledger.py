@@ -136,17 +136,54 @@ def _next_number(values: list[str], prefix: str) -> str:
     return f"{prefix}-{max(numbers, default=0) + 1:04d}"
 
 
-def _rewrite(path: str, header: dict[str, Any], records: list[Record]) -> None:
-    """Replace the file atomically: write a temp file in the same directory, then swap it in."""
-    text = "".join(_dumps(obj) + "\n" for obj in [{"ledger": header}, *records])
+def _temp_file(path: str, data: bytes) -> str:
+    """Write `data` to a new temp file next to `path` and return its name."""
     fd, tmp = tempfile.mkstemp(dir=Path(path).parent, suffix=".tmp")
     try:
-        with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as handle:
-            handle.write(text)
-        os.replace(tmp, path)
+        with os.fdopen(fd, "wb") as handle:
+            handle.write(data)
     except BaseException:
         Path(tmp).unlink(missing_ok=True)
         raise
+    return tmp
+
+
+def _rewrite_all(files: list[tuple[str, dict[str, Any], list[Record]]]) -> None:
+    """Replace several ledgers, in the order given: all of them or, as far as practical, none.
+
+    Every new content is written to a temp file first. The temp files then replace the ledgers
+    one by one; if a replacement fails, the ledgers already replaced are restored from their
+    original bytes (again via temp file and replace), leftover temp files are removed and the
+    error is raised. Only a failure of the restore itself can leave a ledger changed."""
+    originals = {path: Path(path).read_bytes() for path, _, _ in files}
+    temps: list[tuple[str, str]] = []
+    replaced: list[str] = []
+    try:
+        for path, header, records in files:
+            text = "".join(_dumps(obj) + "\n" for obj in [{"ledger": header}, *records])
+            temps.append((path, _temp_file(path, text.encode("utf-8"))))
+        for path, tmp in temps:
+            os.replace(tmp, path)
+            replaced.append(path)
+    except BaseException:
+        for path in replaced:
+            try:
+                restore = _temp_file(path, originals[path])
+                try:
+                    os.replace(restore, path)
+                except BaseException:
+                    Path(restore).unlink(missing_ok=True)
+                    raise
+            except OSError:
+                pass  # keep restoring the others; the original error is the one to report
+        for _, tmp in temps:
+            Path(tmp).unlink(missing_ok=True)
+        raise
+
+
+def _rewrite(path: str, header: dict[str, Any], records: list[Record]) -> None:
+    """Replace the file atomically: write a temp file in the same directory, then swap it in."""
+    _rewrite_all([(path, header, records)])
 
 
 def create_ledger(
@@ -244,8 +281,8 @@ def add_record(
 def move_record(path: str, id: str, to: str, related: list[str] | None = None) -> Record:
     """Move a record (withdrawn ones too) to another ledger, keeping its id, claim_id and
     provenance. It must agree on claim text and importance with the records of its claim in `to`
-    and in the `related` ledgers. The record is appended to `to` first, then removed from
-    `path`."""
+    and in the `related` ledgers. Both ledgers are rewritten together (all or none; on a write
+    error the one already replaced is restored): `to` first, then `path`."""
     if _same_file(path, to):
         raise ValueError("Source and target are the same ledger")
     header, records = read(path)
@@ -256,8 +293,12 @@ def move_record(path: str, id: str, to: str, related: list[str] | None = None) -
     if any(r.get("id") == id for r in to_records):
         raise ValueError(f"{id} already exists in {to}")
     _check(to_header, moved, to_records + _others(to, related))
-    _append(to, moved)
-    _rewrite(path, header, [r for r in records if r is not moved])
+    _rewrite_all(
+        [
+            (to, to_header, [*to_records, moved]),
+            (path, header, [r for r in records if r is not moved]),
+        ]
+    )
     return moved
 
 
@@ -272,8 +313,9 @@ def update_records(
     assessment. Later updates see earlier ones, a duplicate id is applied in order, and every
     affected record is checked against the final state of all ledgers. All refusals are collected
     into one ValueError, each prefixed with the item index and record id, and nothing is written
-    then. Otherwise the related ledgers that changed are rewritten first and the edited ledger
-    last. Returns, for each item, its record in the final state (so two items on one record
+    then. Otherwise the ledgers that changed are rewritten together, the related ones first and
+    the edited one last: all of them or none (on a write error the ones already replaced are
+    restored). Returns, for each item, its record in the final state (so two items on one record
     return the same, fully updated record)."""
     return _update(path, updates, related, single=False)
 
@@ -293,7 +335,7 @@ def _update(
         other_header, rows = read(other_path)
         ledgers.append((other_path, other_header, rows))
     errors: list[str] = []
-    touched: dict[tuple[int, str], int] = {}  # (ledger, record id) -> last update that changed it
+    touched: dict[tuple[int, str], list[int]] = {}  # (ledger, record id) -> updates that changed it
     applied: list[str | None] = []
     for index, item in enumerate(updates):
         prefix = "" if single else f"updates[{index}] ({item.get('id')}): "
@@ -325,7 +367,7 @@ def _update(
             elif updated["quote"] != target.get("quote"):
                 updated["quote_hash"] = quote_hash(updated["quote"])
         records[position] = updated
-        touched[(0, id)] = index
+        touched.setdefault((0, id), []).append(index)
         applied[index] = id
         if claim_changes := {f: changes[f] for f in CLAIM_FIELDS if f in changes}:
             for ledger_number, (_, _, rows) in enumerate(ledgers):
@@ -334,24 +376,22 @@ def _update(
                         rows[number] = {
                             k: v for k, v in other.items() if k not in claim_changes
                         } | {k: v for k, v in claim_changes.items() if v is not None}
-                        touched[(ledger_number, str(other.get("id")))] = index
+                        touched.setdefault((ledger_number, str(other.get("id"))), []).append(index)
     everything = [r for _, _, rows in ledgers for r in rows]
-    for (ledger_number, id), index in touched.items():
+    for (ledger_number, id), indexes in touched.items():
         _, ledger_header, rows = ledgers[ledger_number]
         record = next(r for r in rows if r.get("id") == id)
         try:
             _check(ledger_header, record, [r for r in everything if r is not record])
         except ValueError as error:
-            errors.append(str(error) if single else f"updates[{index}] ({id}): {error}")
+            names = ", ".join(str(n) for n in dict.fromkeys(indexes))
+            errors.append(str(error) if single else f"updates[{names}] ({id}): {error}")
     if errors:
         if single:
             raise ValueError(errors[0])
         raise ValueError(f"{len(errors)} problem(s), nothing written: " + " | ".join(errors))
     changed_ledgers = {ledger_number for ledger_number, _ in touched}
-    for ledger_number in [*range(1, len(ledgers)), 0]:
-        if ledger_number in changed_ledgers:
-            ledger_path, ledger_header, rows = ledgers[ledger_number]
-            _rewrite(ledger_path, ledger_header, rows)
+    _rewrite_all([ledgers[n] for n in [*range(1, len(ledgers)), 0] if n in changed_ledgers])
     by_id = {str(r.get("id")): r for r in records}
     return [by_id[str(id)] for id in applied]
 

@@ -7,6 +7,7 @@ Changes to the MCP server package `evidence-ledger-mcp`. Schema changes are rele
 ### Added
 
 - `update_record` changes fields of a record in place (#48): `changes` is merged into the record and a null value removes a field. `id`, `withdrawn`, `quote_hash` and `provenance` cannot be changed, and a withdrawn record cannot be edited. A new `quote` gets a new `quote_hash`, a removed one drops it, and an unchanged one keeps its hash. The record's provenance becomes the given one with today's date. A change to `claim` or `importance` is copied to every record with the same `claim_id`, withdrawn ones included, which keep their provenance. The checks of `add_record` apply and nothing is written when one fails.
+- Several ledgers per project (#50): `add_record` takes `related`, a list of other ledger paths, and numbers the new `id` and `claim_id` past those of this ledger and all of them. `validate_ledger` takes `related` too and reports `R-xxxx: id also used in <ledger>`. The new `move_record` moves a record (withdrawn ones too) to another ledger, keeping its `id`, `claim_id` and provenance; it refuses the same file, an unknown id, an id already in the target and a record that fails the target's checks, and writes the target first and the source second. Per-ledger id prefixes would need an upstream schema change, so ids are kept unique across related ledgers instead; pass the same `related` list every time.
 
 ### Changed
 

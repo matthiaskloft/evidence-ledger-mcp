@@ -300,3 +300,38 @@ def test_pre_schema_list_runs_every_step(tmp_path: Path) -> None:
 
     assert result["from_version"] is None
     assert result["steps"] == ALL_STEPS
+
+
+def test_yaml_datetime_becomes_a_date(tmp_path: Path) -> None:
+    source = tmp_path / "old.yaml"
+    source.write_text(
+        YAML_TEXT.replace("created: 2026-03-01", "created: 2024-01-01 10:00:00") + yaml_records(),
+        "utf-8",
+    )
+    target = str(tmp_path / "new.jsonl")
+
+    result = import_ledger(str(source), target)
+
+    assert result["problems"] == []
+    assert ledger.read(target)[0]["created"] == "2024-01-01"
+
+
+def test_unquoted_numeric_version_is_explained(tmp_path: Path) -> None:
+    source = tmp_path / "old.yaml"
+    source.write_text(YAML_TEXT.replace("version: 0.3.0", "version: 0.3") + yaml_records(), "utf-8")
+
+    with pytest.raises(ValueError, match="quoted version string"):
+        import_ledger(str(source), str(tmp_path / "new.jsonl"))
+
+
+def test_target_created_after_the_check_is_not_replaced(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source = write_json(tmp_path / "old.json", {"ledger": HEADER, "records": RECORDS})
+    target = tmp_path / "new.jsonl"
+    monkeypatch.setattr(Path, "exists", lambda self: False)
+    target.write_text("keep\n", "utf-8")
+
+    with pytest.raises(ValueError, match="already exists"):
+        import_ledger(source, str(target))
+    assert target.read_text("utf-8") == "keep\n"

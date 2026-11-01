@@ -12,8 +12,8 @@ import yaml
 
 from evidence_ledger_mcp.ledger import (
     Record,
+    _dumps,
     _next_number,
-    _rewrite,
     quote_hash,
     validate_ledger,
 )
@@ -21,8 +21,14 @@ from evidence_ledger_mcp.schema import header_errors, schema_version
 
 
 def _plain(value: Any) -> Any:
-    """Turn the dates and datetimes YAML parses from unquoted values back into ISO strings."""
-    if isinstance(value, datetime | date):
+    """Turn the dates and datetimes YAML parses from unquoted values back into ISO dates.
+
+    A datetime keeps only its date: the schema's date fields (`created`, `provenance.date`) take
+    `YYYY-MM-DD` and refuse a time part.
+    """
+    if isinstance(value, datetime):
+        return value.date().isoformat()
+    if isinstance(value, date):
         return value.isoformat()
     if isinstance(value, dict):
         return {str(k): _plain(v) for k, v in value.items()}
@@ -109,10 +115,14 @@ def _upgrade(header: Header, records: Records) -> tuple[Header, Records, str | N
     if source_version is None:
         start = 0
     else:
-        if not isinstance(source_version, str) or source_version not in known:
+        if not isinstance(source_version, str):
+            raise ValueError(
+                f"schema_version {source_version!r} must be a quoted version string such as "
+                f'"{known[-1]}", not a number'
+            )
+        if source_version not in known:
             if (
-                isinstance(source_version, str)
-                and source_version.count(".") == 2
+                source_version.count(".") == 2
                 and all(part.isdigit() for part in source_version.split("."))
                 and _version_key(source_version) > _version_key(target)
             ):
@@ -178,7 +188,18 @@ def import_ledger(source: str, path: str, work: dict[str, Any] | None = None) ->
         if isinstance(record.get("quote"), str) and "quote_hash" not in record:
             record["quote_hash"] = quote_hash(record["quote"])
 
-    _rewrite(path, header, imported)
+    text = "".join(_dumps(obj) + "\n" for obj in [{"ledger": header}, *imported])
+    try:
+        # Exclusive create: a file that appeared since the check above is never replaced.
+        with open(path, "x", encoding="utf-8", newline="\n") as handle:
+            try:
+                handle.write(text)
+            except BaseException:
+                handle.close()
+                Path(path).unlink(missing_ok=True)
+                raise
+    except FileExistsError:
+        raise ValueError(f"{path} already exists and is not overwritten") from None
     return {
         "path": path,
         "records": len(imported),

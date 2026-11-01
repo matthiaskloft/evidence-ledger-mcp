@@ -218,41 +218,76 @@ def add_record(path: str, record: Record, provenance: dict[str, Any]) -> Record:
     return new
 
 
-def update_record(path: str, id: str, changes: Record, provenance: dict[str, Any]) -> Record:
-    """Merge `changes` into a record (None removes a field), refresh its quote hash and
-    provenance, and copy `claim` or `importance` changes to the other records of the claim."""
-    forbidden = [f for f in ("id", "withdrawn", "quote_hash", "provenance") if f in changes]
-    if forbidden:
-        raise ValueError(f"{', '.join(repr(f) for f in forbidden)} cannot be changed")
-    if not changes:
-        raise ValueError("No changes given")
+def update_records(path: str, updates: list[dict[str, Any]]) -> list[Record]:
+    """Apply `updates` (each `{"id": ..., "changes": {...}}`) in order and rewrite the ledger once.
+
+    Each change is merged into the record (None removes a field) and refreshes its quote hash;
+    `claim` or `importance` changes are copied to the other records of the claim. The record's
+    provenance stays as it was: it records the original assessment. Later updates see earlier
+    ones, a duplicate id is applied in order, and every affected record is checked against the
+    final state. All refusals are collected into one ValueError, each prefixed with the item
+    index and record id, and nothing is written then. Returns the updated record of each item."""
+    if not updates:
+        raise ValueError("No updates given")
     header, records = read(path)
-    target = next((r for r in records if r.get("id") == id), None)
-    if target is None:
-        raise ValueError(f"No record {id} in {path}")
-    if "withdrawn" in target:
-        raise ValueError(f"{id} is withdrawn and cannot be changed")
-    updated: Record = {k: v for k, v in target.items() if k not in changes}
-    updated.update({k: v for k, v in changes.items() if v is not None})
-    if "quote" in changes:
-        if "quote" not in updated:
-            updated.pop("quote_hash", None)
-        elif updated["quote"] != target.get("quote"):
-            updated["quote_hash"] = quote_hash(updated["quote"])
-    updated["provenance"] = {**provenance, "date": date.today().isoformat()}
-    result = [updated if r is target else r for r in records]
-    changed = [updated]
-    if claim_changes := {f: changes[f] for f in CLAIM_FIELDS if f in changes}:
-        for number, other in enumerate(result):
-            if other is not updated and other.get("claim_id") == updated.get("claim_id"):
-                result[number] = {k: v for k, v in other.items() if k not in claim_changes} | {
-                    k: v for k, v in claim_changes.items() if v is not None
-                }
-                changed.append(result[number])
-    for record in changed:
-        _check(header, record, [r for r in result if r is not record])
-    _rewrite(path, header, result)
-    return updated
+    errors: list[str] = []
+    touched: dict[str, int] = {}  # record id -> index of the last update that changed it
+    applied: list[str | None] = []
+    for index, item in enumerate(updates):
+        prefix = f"updates[{index}] ({item.get('id')}): "
+        applied.append(None)
+        id, changes = item.get("id"), item.get("changes")
+        if not isinstance(id, str) or not isinstance(changes, dict):
+            errors.append(prefix + "needs an 'id' string and a 'changes' object")
+            continue
+        forbidden = [f for f in ("id", "withdrawn", "quote_hash", "provenance") if f in changes]
+        if forbidden:
+            errors.append(prefix + f"{', '.join(repr(f) for f in forbidden)} cannot be changed")
+            continue
+        if not changes:
+            errors.append(prefix + "No changes given")
+            continue
+        position = next((n for n, r in enumerate(records) if r.get("id") == id), None)
+        if position is None:
+            errors.append(prefix + f"No record {id} in {path}")
+            continue
+        target = records[position]
+        if "withdrawn" in target:
+            errors.append(prefix + f"{id} is withdrawn and cannot be changed")
+            continue
+        updated: Record = {k: v for k, v in target.items() if k not in changes}
+        updated.update({k: v for k, v in changes.items() if v is not None})
+        if "quote" in changes:
+            if "quote" not in updated:
+                updated.pop("quote_hash", None)
+            elif updated["quote"] != target.get("quote"):
+                updated["quote_hash"] = quote_hash(updated["quote"])
+        records[position] = updated
+        touched[id] = index
+        applied[index] = id
+        if claim_changes := {f: changes[f] for f in CLAIM_FIELDS if f in changes}:
+            for number, other in enumerate(records):
+                if number != position and other.get("claim_id") == updated.get("claim_id"):
+                    records[number] = {k: v for k, v in other.items() if k not in claim_changes} | {
+                        k: v for k, v in claim_changes.items() if v is not None
+                    }
+                    touched[str(other.get("id"))] = index
+    for id, index in touched.items():
+        record = next(r for r in records if r.get("id") == id)
+        try:
+            _check(header, record, [r for r in records if r is not record])
+        except ValueError as error:
+            errors.append(f"updates[{index}] ({id}): {error}")
+    if errors:
+        raise ValueError(f"{len(errors)} problem(s), nothing written: " + " | ".join(errors))
+    _rewrite(path, header, records)
+    by_id = {str(r.get("id")): r for r in records}
+    return [by_id[str(id)] for id in applied]
+
+
+def update_record(path: str, id: str, changes: Record) -> Record:
+    """Merge `changes` into one record; see `update_records`."""
+    return update_records(path, [{"id": id, "changes": changes}])[0]
 
 
 def get_record(path: str, id: str) -> Record:

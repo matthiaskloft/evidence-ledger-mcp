@@ -6,7 +6,8 @@ Changes to the MCP server package `evidence-ledger-mcp`. Schema changes are rele
 
 ### Added
 
-- `update_record` changes fields of a record in place (#48): `changes` is merged into the record and a null value removes a field. `id`, `withdrawn`, `quote_hash` and `provenance` cannot be changed, and a withdrawn record cannot be edited. A new `quote` gets a new `quote_hash`, a removed one drops it, and an unchanged one keeps its hash. The record's provenance becomes the given one with today's date. A change to `claim` or `importance` is copied to every record with the same `claim_id`, withdrawn ones included, which keep their provenance. The checks of `add_record` apply and nothing is written when one fails.
+- `update_records` applies a list of `{id, changes}` updates in order and rewrites the ledger once: later updates see earlier ones, every affected record is checked, all refusals are listed together (prefixed with item index and record id) and nothing is written if any fails. `update_record` is the single-record form (#48).
+- `update_record` changes fields of a record in place (#48): `changes` is merged into the record and a null value removes a field. `id`, `withdrawn`, `quote_hash` and `provenance` cannot be changed, and a withdrawn record cannot be edited. A new `quote` gets a new `quote_hash`, a removed one drops it, and an unchanged one keeps its hash. The record's provenance is not changed: it records the original assessment, not later edits. A change to `claim` or `importance` is copied to every record with the same `claim_id`, withdrawn ones included, which keep their provenance. The checks of `add_record` apply and nothing is written when one fails.
 
 ### Changed
 

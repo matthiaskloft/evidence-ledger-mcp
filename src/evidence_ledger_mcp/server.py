@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from importlib.metadata import version
 from typing import Any, Literal
 
@@ -83,17 +83,27 @@ def add_record(path: str, record: dict[str, Any], provenance: dict[str, Any]) ->
 
 
 @mcp.tool()
-def update_record(
-    path: str, id: str, changes: dict[str, Any], provenance: dict[str, Any]
-) -> Record:
+def update_record(path: str, id: str, changes: dict[str, Any]) -> Record:
     """Change fields of one record and return it. `changes` is merged into the record; a null
     value removes a field. `id`, `withdrawn`, `quote_hash` and `provenance` cannot be changed,
     and a withdrawn record cannot be edited. A new `quote` gets a new `quote_hash`; a removed one
-    drops it. The record's provenance becomes the given `provenance` with today's date. A
-    change to `claim` or `importance` is copied to every record with the same `claim_id`,
-    which keep their provenance. The same checks as `add_record` apply, and nothing is written
-    when one fails."""
-    return ledger.update_record(path, id, changes, provenance)
+    drops it. The record's `provenance` is not touched: it records the original assessment (who,
+    which model, which manuscript revision, when), not later edits. A change to `claim` or
+    `importance` is copied to every record with the same `claim_id`. The same checks as
+    `add_record` apply, and nothing is written when one fails."""
+    return ledger.update_record(path, id, changes)
+
+
+@mcp.tool()
+def update_records(path: str, updates: list[dict[str, Any]]) -> Sequence[Record]:
+    """Change fields of several records in one call and return the updated record of each item.
+    `updates` is a list of `{"id": "R-0001", "changes": {...}}`; each `changes` works as in
+    `update_record`, and provenance stays as it was. Updates apply in order, so a later one sees
+    an earlier one (a duplicate id is allowed), and claim-level changes are copied to the claim's
+    other records. Every affected record is checked against the final state. If any item is
+    refused, the error lists all refusals, each prefixed with the item index and record id, and
+    nothing is written; otherwise the ledger is rewritten once."""
+    return ledger.update_records(path, updates)
 
 
 @mcp.tool()

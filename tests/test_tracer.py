@@ -63,6 +63,35 @@ async def lifecycle(ledger: Path) -> None:
         assert [r["id"] for r in by_key] == ["R-0002"]
         assert (await call(session, "get_record", path=path, id="R-0001"))["key"] == RECORD["key"]
 
+        edited = await call(
+            session,
+            "update_record",
+            path=path,
+            id="R-0002",
+            changes={"claim": "Keeping a ledger cut unchecked citations a lot.", "note": None},
+        )
+        assert edited["id"] == "R-0002"
+        assert edited["provenance"] == second["provenance"]
+        batch = await call(
+            session,
+            "update_records",
+            path=path,
+            updates=[{"id": "R-0001", "changes": {"locator": {"page": 3}}}],
+        )
+        assert batch[0]["locator"] == {"page": 3}
+        assert (await call(session, "get_record", path=path, id="R-0001"))["claim"] == (
+            edited["claim"]
+        )
+        failed = await session.call_tool(
+            "update_record",
+            {"path": path, "id": "R-0002", "changes": {"id": "R-0009"}},
+        )
+        assert failed.isError
+        failed = await session.call_tool(
+            "update_records", {"path": path, "updates": [{"id": "R-0009", "changes": {"a": 1}}]}
+        )
+        assert failed.isError
+
         await call(session, "withdraw_record", path=path, id="R-0002", reason="Duplicate")
         active = await call(session, "find_records", path=path, claim_id="C-0001")
         assert [r["id"] for r in active] == ["R-0001"]

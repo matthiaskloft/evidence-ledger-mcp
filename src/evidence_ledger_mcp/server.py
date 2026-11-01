@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from importlib.metadata import version
 from typing import Any, Literal
 
@@ -22,7 +22,8 @@ mcp = FastMCP(
     "`quote_prefix`, `quote_suffix`, `quote_focus`). Write every other field (`justification`, "
     "`locator`, `note`, and the header's `description` and `notes`) in your own words, because "
     "they are exported at every level; a run of 24 or more letters and digits from a quote there "
-    "blocks masked and locator exports, and `add_record` refuses it. "
+    "blocks masked and locator exports, and `add_record`, `update_record` and `update_records` "
+    "refuse it. "
     "When a tool fails or a result looks wrong (a valid record "
     "rejected, an export that fails its own validation, a check that blocks an export without "
     "a clear reason), stop and tell the user; do not work around it or edit the ledger by hand "
@@ -87,15 +88,69 @@ def import_ledger(source: str, path: str, work: dict[str, Any] | None = None) ->
 
 
 @mcp.tool()
-def add_record(path: str, record: dict[str, Any], provenance: dict[str, Any]) -> Record:
+def add_record(
+    path: str,
+    record: dict[str, Any],
+    provenance: dict[str, Any],
+    related: list[str] | None = None,
+) -> Record:
     """Append a record. The server assigns `id`, `claim_id` (unless given), `quote_hash` and the
     provenance date, validates the result and returns the stored record. Mark the phrase
     carrying the claim (a number, term or short statement) with optional `quote_focus`. Source
     text belongs only in `quote`, `quote_prefix`, `quote_suffix` and `quote_focus`: write
     `justification`, `locator` (including a section heading) and `note` in your own words, since
     they are exported with masked and locator ledgers; a record that repeats 24 or more letters
-    and digits of its own quote in another field is refused, naming the field."""
-    return ledger.add_record(path, record, provenance)
+    and digits of its own quote in another field is refused, naming the field. A project with
+    several ledgers keeps ids unique across them: pass the other ledgers' paths as `related`
+    every time: the new `id` and `claim_id` are numbered past those of all of them, and `claim`
+    and `importance` must agree with the records of the same claim in them."""
+    return ledger.add_record(path, record, provenance, related)
+
+
+@mcp.tool()
+def update_record(
+    path: str, id: str, changes: dict[str, Any], related: list[str] | None = None
+) -> Record:
+    """Change fields of one record and return it. `changes` is merged into the record; a null
+    value removes a field. `id`, `withdrawn`, `quote_hash` and `provenance` cannot be changed,
+    and a withdrawn record cannot be edited. A new `quote` gets a new `quote_hash`; a removed one
+    drops it. The record's `provenance` is not touched: it records the original assessment (who,
+    which model, which manuscript revision, when), not later edits. A change to `claim` or
+    `importance` is copied to every record with the same `claim_id`; a claim may span related
+    ledgers, so pass their paths as `related` (the same list every time) to update its records
+    there too. The same checks as `add_record` apply to every affected ledger, and nothing is
+    written when one fails."""
+    return ledger.update_record(path, id, changes, related)
+
+
+@mcp.tool()
+def update_records(
+    path: str, updates: list[dict[str, Any]], related: list[str] | None = None
+) -> Sequence[Record]:
+    """Change fields of several records in one call and return each item's record in its final
+    state (two items on one record return the same, fully updated record).
+    `updates` is a list of `{"id": "R-0001", "changes": {...}}`; each `changes` works as in
+    `update_record`, and provenance stays as it was. Updates apply in order, so a later one sees
+    an earlier one (a duplicate id is allowed), and claim-level changes are copied to the claim's
+    other records, also in the `related` ledgers (pass the same list every time). Every affected
+    record is checked against the final state of all ledgers. If any item is refused, the error
+    lists all refusals, each prefixed with the item index and record id, and nothing is written;
+    otherwise the changed ledgers are rewritten together, related ones first and the edited one
+    last: all files or none (on a write error the files already replaced are restored)."""
+    return ledger.update_records(path, updates, related)
+
+
+@mcp.tool()
+def move_record(path: str, id: str, to: str, related: list[str] | None = None) -> Record:
+    """Move a record (withdrawn ones too) from the ledger at `path` to the ledger at `to`,
+    keeping its `id`, `claim_id` and provenance, and return it. Refused when both are the same
+    file, the id is missing from `path` or already used in `to`, or the record fails the checks
+    of `add_record` against `to` and the `related` ledgers (header text, claim text or
+    importance of its claim). The claim may then span both ledgers: pass the project's other
+    ledgers as `related` to later calls so it stays consistent. Both files are rewritten
+    together, `to` first, all or none (on a write error the one already replaced is restored).
+    The id is not reused as long as `related` lists every ledger of the project each time."""
+    return ledger.move_record(path, id, to, related)
 
 
 @mcp.tool()
@@ -119,9 +174,13 @@ def find_records(
 
 
 @mcp.tool()
-def validate_ledger(path: str) -> list[str]:
-    """Validate a whole ledger; returns the problems found, empty if valid."""
-    return ledger.validate_ledger(path)
+def validate_ledger(path: str, related: list[str] | None = None) -> list[str]:
+    """Validate a whole ledger; returns the problems found, empty if valid. Pass the other
+    ledgers of the project as `related` (the same list as for `add_record`) to also report ids
+    used in more than one of them (`R-0001: id also used in <ledger>`) and claims whose records
+    disagree on claim text or importance across them (`C-0001: records disagree on claim text
+    across related ledgers`)."""
+    return ledger.validate_ledger(path, related)
 
 
 @mcp.tool()

@@ -197,25 +197,64 @@ def _check(header: dict[str, Any], record: Record, others: list[Record]) -> None
                 raise ValueError(f"{field} differs from {other.get('id')} on {record['claim_id']}")
 
 
-def add_record(path: str, record: Record, provenance: dict[str, Any]) -> Record:
-    """Complete a record (id, claim_id, quote_hash, provenance date), validate and append it."""
+def _others(path: str, related: list[str] | None) -> list[Record]:
+    """Records of the related ledgers, leaving out `path` itself."""
+    records: list[Record] = []
+    for other in related or []:
+        if not _same_file(path, other):
+            records += read(other)[1]
+    return records
+
+
+def _same_file(a: str, b: str) -> bool:
+    return Path(a).resolve() == Path(b).resolve()
+
+
+def _append(path: str, record: Record) -> None:
+    # A hand-edited file may lack its final newline; appending would join two lines.
+    prefix = "" if Path(path).read_bytes().endswith(b"\n") else "\n"
+    with open(path, "a", encoding="utf-8", newline="\n") as handle:
+        handle.write(prefix + _dumps(record) + "\n")
+
+
+def add_record(
+    path: str, record: Record, provenance: dict[str, Any], related: list[str] | None = None
+) -> Record:
+    """Complete a record (id, claim_id, quote_hash, provenance date), validate and append it.
+    New ids and claim ids are numbered past those of this ledger and every `related` ledger."""
     for field in ("id", "withdrawn"):
         if field in record:
             raise ValueError(f"'{field}' is assigned by the server and cannot be supplied")
     header, existing = read(path)
-    new: Record = {"id": _next_number([str(r.get("id", "")) for r in existing], "R"), **record}
-    new.setdefault("claim_id", _next_number([str(r.get("claim_id", "")) for r in existing], "C"))
+    taken = existing + _others(path, related)
+    new: Record = {"id": _next_number([str(r.get("id", "")) for r in taken], "R"), **record}
+    new.setdefault("claim_id", _next_number([str(r.get("claim_id", "")) for r in taken], "C"))
     if "quote" in new:
         new["quote_hash"] = quote_hash(new["quote"])
     elif "quote_hash" in new:
         raise ValueError("'quote_hash' without 'quote' cannot be checked")
     new["provenance"] = {**provenance, "date": date.today().isoformat()}
     _check(header, new, existing)
-    # A hand-edited file may lack its final newline; appending would join two lines.
-    prefix = "" if Path(path).read_bytes().endswith(b"\n") else "\n"
-    with open(path, "a", encoding="utf-8", newline="\n") as handle:
-        handle.write(prefix + _dumps(new) + "\n")
+    _append(path, new)
     return new
+
+
+def move_record(path: str, id: str, to: str) -> Record:
+    """Move a record (withdrawn ones too) to another ledger, keeping its id, claim_id and
+    provenance. The record is appended to `to` first, then removed from `path`."""
+    if _same_file(path, to):
+        raise ValueError("Source and target are the same ledger")
+    header, records = read(path)
+    moved = next((r for r in records if r.get("id") == id), None)
+    if moved is None:
+        raise ValueError(f"No record {id} in {path}")
+    to_header, to_records = read(to)
+    if any(r.get("id") == id for r in to_records):
+        raise ValueError(f"{id} already exists in {to}")
+    _check(to_header, moved, to_records)
+    _append(to, moved)
+    _rewrite(path, header, [r for r in records if r is not moved])
+    return moved
 
 
 def update_record(path: str, id: str, changes: Record, provenance: dict[str, Any]) -> Record:
@@ -290,8 +329,9 @@ def find_records(
     return found
 
 
-def validate_ledger(path: str) -> list[str]:
-    """Return all problems found in the ledger, empty if it is valid."""
+def validate_ledger(path: str, related: list[str] | None = None) -> list[str]:
+    """Return all problems found in the ledger, empty if it is valid. With `related` ledgers,
+    also report ids this ledger shares with them."""
     lines = _lines(path)
     header = _header(lines[0]) if lines else None
     if header is None:
@@ -370,6 +410,13 @@ def validate_ledger(path: str) -> list[str]:
         for claim, texts in claims.items()
         if len(texts) > 1
     ]
+    for other in related or []:
+        if _same_file(path, other):
+            continue
+        used = {r.get("id") for r in read(other)[1]}
+        problems += [
+            f"{label}: id also used in {other}" for label in sorted(seen_ids & used, key=str)
+        ]
     return problems
 
 

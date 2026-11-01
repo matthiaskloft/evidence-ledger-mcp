@@ -497,3 +497,102 @@ def test_validate_reports_claim_text_disagreement(path: str) -> None:
     second = add(path, claim_id="C-0001")
     rewrite_line(path, 2, {**second, "claim": "A different claim."})
     assert "C-0001: records disagree on claim text" in ledger.validate_ledger(path)
+
+
+@pytest.fixture
+def pair(tmp_path: Path) -> tuple[str, str]:
+    first, second = str(tmp_path / "schema.jsonl"), str(tmp_path / "server.jsonl")
+    ledger.create_ledger(first, WORK)
+    ledger.create_ledger(second, WORK)
+    return first, second
+
+
+def add_related(path: str, related: list[str], **changes: Any) -> dict[str, Any]:
+    return ledger.add_record(path, {**RECORD, **changes}, PROVENANCE, related)
+
+
+def snapshot(*paths: str) -> list[bytes]:
+    return [Path(p).read_bytes() for p in paths]
+
+
+def test_add_record_numbers_past_related_ledgers(pair: tuple[str, str]) -> None:
+    first, second = pair
+    added = [
+        add_related(first, [second]),
+        add_related(second, [first], claim="Second claim."),
+        add_related(first, [second], claim="Third claim."),
+        add_related(second, [first], claim="Fourth claim."),
+    ]
+    assert [r["id"] for r in added] == ["R-0001", "R-0002", "R-0003", "R-0004"]
+    assert [r["claim_id"] for r in added] == ["C-0001", "C-0002", "C-0003", "C-0004"]
+    assert ledger.validate_ledger(first, [second]) == []
+    assert ledger.validate_ledger(second, [first, second]) == []
+
+
+def test_add_record_without_related_numbers_per_ledger(pair: tuple[str, str]) -> None:
+    first, second = pair
+    add(first)
+    assert add(second)["id"] == "R-0001"
+
+
+def test_move_record_keeps_everything_and_never_reuses_the_id(pair: tuple[str, str]) -> None:
+    first, second = pair
+    add_related(first, [second])
+    add_related(first, [second], claim="Moved claim.")
+    ledger.withdraw_record(first, "R-0002", "Not needed")
+    stored = ledger.get_record(first, "R-0002")
+    assert ledger.move_record(first, "R-0002", second) == stored
+    assert [r["id"] for r in ledger.read(first)[1]] == ["R-0001"]
+    assert ledger.read(second)[1] == [stored]
+    assert ledger.validate_ledger(first, [second]) == []
+    assert ledger.validate_ledger(second, [first]) == []
+    assert add_related(first, [second], claim="Later.")["id"] == "R-0003"
+
+
+def test_move_record_refusals_write_nothing(pair: tuple[str, str]) -> None:
+    first, second = pair
+    add_related(first, [second])
+    add_related(second, [first], claim="Other.")
+    rewrite_line(second, 1, {**ledger.read(second)[1][0], "id": "R-0001"})
+    before = snapshot(first, second)
+    for args, match in [
+        ((first, "R-0001", first), "same ledger"),
+        ((first, "R-0009", second), "No record R-0009"),
+        ((first, "R-0001", second), "already exists"),
+    ]:
+        with pytest.raises(ValueError, match=match):
+            ledger.move_record(*args)
+        assert snapshot(first, second) == before
+
+
+def test_move_record_runs_the_target_checks(pair: tuple[str, str]) -> None:
+    first, second = pair
+    add_related(first, [second])
+    rewrite_line(second, 0, {"ledger": {**ledger.read(second)[0], "notes": RECORD["quote"]}})
+    before = snapshot(first, second)
+    with pytest.raises(ValueError, match=r"header\.notes"):
+        ledger.move_record(first, "R-0001", second)
+    assert snapshot(first, second) == before
+
+
+def test_move_record_refuses_a_claim_disagreement(pair: tuple[str, str]) -> None:
+    first, second = pair
+    add_related(first, [second])
+    other = {**ledger.read(first)[1][0], "id": "R-0002", "claim": "A different wording."}
+    with open(second, "a", encoding="utf-8", newline="\n") as handle:
+        handle.write(json.dumps(other) + "\n")
+    before = snapshot(first, second)
+    with pytest.raises(ValueError, match="claim differs from R-0002 on C-0001"):
+        ledger.move_record(first, "R-0001", second)
+    assert snapshot(first, second) == before
+
+
+def test_validate_ledger_reports_ids_shared_with_related(pair: tuple[str, str]) -> None:
+    first, second = pair
+    add_related(first, [second])
+    with open(second, "a", encoding="utf-8", newline="\n") as handle:
+        handle.write(json.dumps(ledger.read(first)[1][0]) + "\n")
+    assert ledger.validate_ledger(first) == []
+    assert ledger.validate_ledger(first, [second]) == [f"R-0001: id also used in {second}"]
+    assert ledger.validate_ledger(second, [first]) == [f"R-0001: id also used in {first}"]
+    assert ledger.validate_ledger(first, [first]) == []

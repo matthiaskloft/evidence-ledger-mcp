@@ -71,15 +71,22 @@ def create_ledger(
 
 
 @mcp.tool()
-def add_record(path: str, record: dict[str, Any], provenance: dict[str, Any]) -> Record:
+def add_record(
+    path: str,
+    record: dict[str, Any],
+    provenance: dict[str, Any],
+    related: list[str] | None = None,
+) -> Record:
     """Append a record. The server assigns `id`, `claim_id` (unless given), `quote_hash` and the
     provenance date, validates the result and returns the stored record. Mark the phrase
     carrying the claim (a number, term or short statement) with optional `quote_focus`. Source
     text belongs only in `quote`, `quote_prefix`, `quote_suffix` and `quote_focus`: write
     `justification`, `locator` (including a section heading) and `note` in your own words, since
     they are exported with masked and locator ledgers; a record that repeats 24 or more letters
-    and digits of its own quote in another field is refused, naming the field."""
-    return ledger.add_record(path, record, provenance)
+    and digits of its own quote in another field is refused, naming the field. A project with
+    several ledgers keeps ids unique across them: pass the other ledgers' paths as `related`
+    every time, and the new `id` and `claim_id` are numbered past those of all of them."""
+    return ledger.add_record(path, record, provenance, related)
 
 
 @mcp.tool()
@@ -94,6 +101,16 @@ def update_record(
     which keep their provenance. The same checks as `add_record` apply, and nothing is written
     when one fails."""
     return ledger.update_record(path, id, changes, provenance)
+
+
+@mcp.tool()
+def move_record(path: str, id: str, to: str) -> Record:
+    """Move a record (withdrawn ones too) from the ledger at `path` to the ledger at `to`,
+    keeping its `id`, `claim_id` and provenance, and return it. Refused when both are the same
+    file, the id is missing from `path` or already used in `to`, or the record fails the checks
+    of `add_record` against `to` (header text, claim text or importance of its claim). The
+    record is written to `to` first, then removed from `path`; the id is not reused."""
+    return ledger.move_record(path, id, to)
 
 
 @mcp.tool()
@@ -117,9 +134,11 @@ def find_records(
 
 
 @mcp.tool()
-def validate_ledger(path: str) -> list[str]:
-    """Validate a whole ledger; returns the problems found, empty if valid."""
-    return ledger.validate_ledger(path)
+def validate_ledger(path: str, related: list[str] | None = None) -> list[str]:
+    """Validate a whole ledger; returns the problems found, empty if valid. Pass the other
+    ledgers of the project as `related` (the same list as for `add_record`) to also report ids
+    used in more than one of them (`R-0001: id also used in <ledger>`)."""
+    return ledger.validate_ledger(path, related)
 
 
 @mcp.tool()

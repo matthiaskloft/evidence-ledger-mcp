@@ -88,7 +88,13 @@ def test_yaml_with_unquoted_dates(tmp_path: Path) -> None:
 
     result = import_ledger(str(source), target)
 
-    assert result == {"path": target, "records": 3, "problems": []}
+    assert result == {
+        "path": target,
+        "records": 3,
+        "from_version": "0.3.0",
+        "steps": ["0.3.0→0.4.0"],
+        "problems": [],
+    }
     header, records = ledger.read(target)
     assert header == {**HEADER, "schema_version": schema_version()}
     assert [r["id"] for r in records] == ["R-0001", "R-0002", "R-0005"]
@@ -216,3 +222,81 @@ def test_add_record_continues_numbering(tmp_path: Path) -> None:
     assert added["id"] == "R-0006"
     assert added["claim_id"] == "C-0003"
     assert ledger.validate_ledger(target) == []
+
+
+def write_jsonl(path: Path, lines: list[object]) -> str:
+    path.write_text("\n".join(json.dumps(x) for x in lines) + "\n", "utf-8")
+    return str(path)
+
+
+ALL_STEPS = ["0.2.0→0.3.0", "0.3.0→0.4.0"]
+
+
+def test_jsonl_source_with_older_version(tmp_path: Path) -> None:
+    header = {**HEADER, "schema_version": "0.2.0"}
+    source = write_jsonl(tmp_path / "old.jsonl", [{"ledger": header}, *RECORDS])
+    target = str(tmp_path / "new.jsonl")
+
+    result = import_ledger(source, target)
+
+    assert result["from_version"] == "0.2.0"
+    assert result["steps"] == ALL_STEPS
+    assert result["problems"] == []
+    new_header, records = ledger.read(target)
+    assert new_header["schema_version"] == schema_version()
+    assert records == RECORDS
+
+
+def test_jsonl_detected_by_header_line(tmp_path: Path) -> None:
+    source = write_jsonl(tmp_path / "old.txt", [{"ledger": HEADER}, *RECORDS])
+    result = import_ledger(source, str(tmp_path / "new.jsonl"))
+    assert result["records"] == 3
+
+
+def test_jsonl_bad_lines_are_named(tmp_path: Path) -> None:
+    path = tmp_path / "old.jsonl"
+    path.write_text(
+        json.dumps({"ledger": HEADER}) + "\n{broken\n\n[1, 2]\n" + json.dumps(RECORDS[0]) + "\n",
+        "utf-8",
+    )
+    target = tmp_path / "new.jsonl"
+
+    with pytest.raises(ValueError, match="line 2 is not valid JSON; line 4 is not an object"):
+        import_ledger(str(path), str(target))
+    assert not target.exists()
+
+
+def test_version_newer_than_server_is_refused(tmp_path: Path) -> None:
+    header = {**HEADER, "schema_version": "99.0.0"}
+    source = write_json(tmp_path / "new.json", {"ledger": header, "records": RECORDS})
+    target = tmp_path / "out.jsonl"
+
+    with pytest.raises(ValueError, match="newer than this server"):
+        import_ledger(source, str(target))
+    assert not target.exists()
+
+
+def test_unknown_version_is_refused(tmp_path: Path) -> None:
+    header = {**HEADER, "schema_version": "0.1.0"}
+    source = write_json(tmp_path / "old.json", {"ledger": header, "records": RECORDS})
+
+    with pytest.raises(ValueError, match=r"known versions: 0.2.0, 0.3.0, 0.4.0"):
+        import_ledger(source, str(tmp_path / "out.jsonl"))
+
+
+def test_current_version_needs_no_steps(tmp_path: Path) -> None:
+    header = {**HEADER, "schema_version": schema_version()}
+    source = write_json(tmp_path / "cur.json", {"ledger": header, "records": RECORDS})
+
+    result = import_ledger(source, str(tmp_path / "out.jsonl"))
+
+    assert result["steps"] == []
+
+
+def test_pre_schema_list_runs_every_step(tmp_path: Path) -> None:
+    source = write_json(tmp_path / "hand.json", RECORDS)
+
+    result = import_ledger(source, str(tmp_path / "out.jsonl"), WORK)
+
+    assert result["from_version"] is None
+    assert result["steps"] == ALL_STEPS

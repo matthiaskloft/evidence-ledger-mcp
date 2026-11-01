@@ -72,14 +72,17 @@ def create_ledger(
 
 @mcp.tool()
 def import_ledger(source: str, path: str, work: dict[str, Any] | None = None) -> Record:
-    """Import an older ledger (schema 0.2 to 0.4; a YAML or JSON file shaped `{"ledger": header,
-    "records": [...]}` or a plain list of records) as a new JSON Lines ledger at `path`, which
-    must not exist. A plain list needs `work` (`title` and `type`); a source with a header must
-    not be given `work`. The header gets this server's schema version; records keep their ids,
-    claim ids, provenance and quote hashes (an older `sha256-n1` hash stays valid), and the server
-    assigns missing ids and claim ids and the hash of a quote lacking one. Records that fail
-    validation are still written so that they can be fixed; the result holds `path`, `records`
-    and `problems` (as `validate_ledger` reports them, empty if valid)."""
+    """Import a ledger of any older schema version, or a pre-schema hand-built list, as a new JSON
+    Lines ledger at `path`, which must not exist. The source is YAML, JSON (`{"ledger": header,
+    "records": [...]}` or a plain list of records) or JSON Lines (header on the first line, one
+    record per line). A plain list needs `work` (`title` and `type`); a source with a header must
+    not be given `work`. The header's `schema_version` is upgraded step by step to this server's
+    (a newer or unknown version is refused); records keep their ids, claim ids, provenance dates
+    and quote hashes (an older `sha256-n1` hash stays valid), and the server assigns missing ids
+    and claim ids and the hash of a quote lacking one. Records that fail validation are still
+    written so that they can be fixed; the result holds `path`, `records`, `from_version` (null
+    for a pre-schema list), `steps` (such as "0.2.0→0.3.0") and `problems` (all found at once,
+    as `validate_ledger` reports them, empty if valid)."""
     return migrate.import_ledger(source, path, work)
 
 

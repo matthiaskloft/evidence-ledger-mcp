@@ -6,7 +6,7 @@ from typing import Any
 
 import pytest
 
-from evidence_ledger_mcp import embed, ledger
+from evidence_ledger_mcp import embed, ledger, summary
 
 WORK = {"title": "Example work", "type": "manuscript"}
 PROVENANCE = {"by_type": "agent", "by": "Claude Code", "model": "claude-opus-5-5"}
@@ -370,7 +370,7 @@ def test_other_anchors_of_a_located_claim_are_shown(path: str) -> None:
     add(path, claim_id="C-0001", key="otherStudy", anchor={"exact": "second spot xyz"})
     add(path, claim_id="C-0001", key="thirdStudy")
     _, full = run(path, level="full")
-    assert full.count("second spot xyz") == 1 and full.count("In the work") == 1
+    assert full.count("second spot xyz") == 1 and full.count("In the work") == 3
     _, masked = run_new(path, level="masked")
     assert "second spot xyz" not in masked
     assert "Anchor text withheld at this level." in masked
@@ -426,3 +426,28 @@ def test_refuses_a_work_with_a_base_url(path: str) -> None:
     with pytest.raises(ValueError, match="base"):
         embed.embed_ledger(path, str(work), str(folder / "embedded.html"))
     assert not (folder / "embedded.html").exists()
+
+
+def test_each_record_has_its_anchor_block_directly_above_it() -> None:
+    def card(anchors: list[object], marked: object = summary._UNMARKED) -> str:
+        records = [
+            {**RECORD, "claim_id": "C-1", "key": f"k{n}", "anchor": a}
+            for n, a in enumerate(anchors)
+        ]
+        return embed._card("C-1", records, {}, "full", marked=marked)
+
+    first = {"exact": "alpha", "marker": "M1"}
+    html = card([first, {"exact": "alpha", "marker": "M2"}], marked=first)
+    assert html.count("In the work") == 2
+    assert html.index("M1") < html.index("<article") < html.index("M2")
+    assert html.index("M2") < html.rindex("<article")
+    assert "In the work" not in card([first], marked=first)
+    mixed = card([first, None, "junk"], marked=first)
+    assert mixed.count("No anchor recorded.") == 2
+    unmarked = card([first, {"exact": "beta", "marker": "M2"}])
+    assert unmarked.count("In the work") == 2
+
+
+def test_panel_card_is_border_box() -> None:
+    rule = embed.PANEL_STYLE.split("#el-card {", 1)[1].split("}", 1)[0]
+    assert "box-sizing: border-box" in rule

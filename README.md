@@ -14,6 +14,10 @@ It is built for academics: authors and co-authors who write with LLMs and want e
 
 The MCP server and its associated documentation use the [MIT licence](LICENSE). The bundled schema uses [CC BY 4.0](schema/LICENSE), with attribution to Matthias Kloft. These licences do not cover ledger contents or third-party source material.
 
+## What is a ledger?
+
+A ledger is a running record, like an accounting book, where each entry is written down once and can be checked later. An evidence ledger is such a record for claims and their evidence: one entry for each claim in a text, saying which source backs it and where. A source can be any document, such as an article, a book, an internal report, a protocol or a dataset description.
+
 ## The evidence ledger schema
 
 Every ledger this server writes follows the **[evidence ledger schema](https://github.com/matthiaskloft/evidence-ledger-schema#readme)** (JSON Schema, draft 2020-12), currently **v0.4.0**. The schema is the contract: any tool, script or person can read, validate and check a ledger with it, with or without this server. Its README documents the purpose, the file shapes, every record field, quote hashing, a minimal example and the sources the fields draw on. The server bundles a pinned copy in [`schema/`](schema/) and reports the supported version through `schema_info`.

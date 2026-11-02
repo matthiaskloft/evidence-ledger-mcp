@@ -370,7 +370,7 @@ def test_other_anchors_of_a_located_claim_are_shown(path: str) -> None:
     add(path, claim_id="C-0001", key="otherStudy", anchor={"exact": "second spot xyz"})
     add(path, claim_id="C-0001", key="thirdStudy")
     _, full = run(path, level="full")
-    assert full.count("second spot xyz") == 1 and full.count("In the work") == 1
+    assert full.count("second spot xyz") == 1 and full.count("In the work") == 3
     _, masked = run_new(path, level="masked")
     assert "second spot xyz" not in masked
     assert "Anchor text withheld at this level." in masked
@@ -426,3 +426,13 @@ def test_refuses_a_work_with_a_base_url(path: str) -> None:
     with pytest.raises(ValueError, match="base"):
         embed.embed_ledger(path, str(work), str(folder / "embedded.html"))
     assert not (folder / "embedded.html").exists()
+
+
+def test_panel_card_shows_every_anchor_when_records_differ_and_is_border_box() -> None:
+    records = [
+        {**RECORD, "claim_id": "C-1", "anchor": {"exact": "alpha", "marker": "M1"}},
+        {**RECORD, "claim_id": "C-1", "anchor": {"exact": "beta", "marker": "M2"}},
+    ]
+    card = embed._card("C-1", records, {}, "full", marked=records[0]["anchor"])
+    assert card.count("In the work") == 2
+    assert "box-sizing: border-box" in embed.PANEL_STYLE

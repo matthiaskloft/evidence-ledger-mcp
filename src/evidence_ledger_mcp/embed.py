@@ -124,6 +124,7 @@ html:not(.el-panel) #el-card, html:not(.el-panel) .el-howto { display: none; }
   box-shadow: 0 -6px 24px rgba(0, 0, 0, 0.18); padding: 0.8rem 1rem 1.2rem;
   font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
 #el-card[hidden] { display: none; }
+#el-card { box-sizing: border-box; }
 #el-card:focus { outline: none; }
 #el-card header { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem;
   color: var(--el-muted); font-size: 0.8rem; margin-bottom: 0.5rem; }

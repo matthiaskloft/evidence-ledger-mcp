@@ -256,7 +256,8 @@ def _claim_parts(
     """The claim part and the evidence part of a claim's card, as HTML.
 
     With `marked`, the claim's anchor is highlighted in the work itself: the claim part shows no
-    anchor and a record's anchor is shown only when it differs from the marked one."""
+    anchor; a record's anchor is shown only when it differs from the marked one, and then for
+    every record of the claim, so that each record has its own "In the work" block."""
     in_text = marked is not _UNMARKED
     first = records[0]
     anchor = first.get("anchor")
@@ -272,6 +273,7 @@ def _claim_parts(
     n = len(records)
     label = f'<p class="label">Evidence ({n} {"source" if n == 1 else "sources"})</p>'
     body = ""
+    anchors_differ = any(r.get("anchor") != reference for r in records)
     for record in records:
         differences = "".join(
             _prose(
@@ -282,7 +284,7 @@ def _claim_parts(
             for field in ("claim", "claim_type", "contestable")
             if field in record and record.get(field) != first.get(field)
         )
-        if record.get("anchor") != reference:
+        if anchors_differ and (in_text or record.get("anchor") != reference):
             differences += anchor_html(record.get("anchor"))
         href = (key_hrefs or {}).get(str(record.get("key", "")))
         body += differences + _record(record, href)

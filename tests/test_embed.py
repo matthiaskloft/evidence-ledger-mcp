@@ -6,7 +6,7 @@ from typing import Any
 
 import pytest
 
-from evidence_ledger_mcp import embed, ledger
+from evidence_ledger_mcp import embed, ledger, summary
 
 WORK = {"title": "Example work", "type": "manuscript"}
 PROVENANCE = {"by_type": "agent", "by": "Claude Code", "model": "claude-opus-5-5"}
@@ -428,11 +428,26 @@ def test_refuses_a_work_with_a_base_url(path: str) -> None:
     assert not (folder / "embedded.html").exists()
 
 
-def test_panel_card_shows_every_anchor_when_records_differ_and_is_border_box() -> None:
-    records = [
-        {**RECORD, "claim_id": "C-1", "anchor": {"exact": "alpha", "marker": "M1"}},
-        {**RECORD, "claim_id": "C-1", "anchor": {"exact": "beta", "marker": "M2"}},
-    ]
-    card = embed._card("C-1", records, {}, "full", marked=records[0]["anchor"])
-    assert card.count("In the work") == 2
-    assert "box-sizing: border-box" in embed.PANEL_STYLE
+def test_each_record_has_its_anchor_block_directly_above_it() -> None:
+    def card(anchors: list[object], marked: object = summary._UNMARKED) -> str:
+        records = [
+            {**RECORD, "claim_id": "C-1", "key": f"k{n}", "anchor": a}
+            for n, a in enumerate(anchors)
+        ]
+        return embed._card("C-1", records, {}, "full", marked=marked)
+
+    first = {"exact": "alpha", "marker": "M1"}
+    html = card([first, {"exact": "alpha", "marker": "M2"}], marked=first)
+    assert html.count("In the work") == 2
+    assert html.index("M1") < html.index("<article") < html.index("M2")
+    assert html.index("M2") < html.rindex("<article")
+    assert "In the work" not in card([first], marked=first)
+    mixed = card([first, None, "junk"], marked=first)
+    assert mixed.count("No anchor recorded.") == 2
+    unmarked = card([first, {"exact": "beta", "marker": "M2"}])
+    assert unmarked.count("In the work") == 2
+
+
+def test_panel_card_is_border_box() -> None:
+    rule = embed.PANEL_STYLE.split("#el-card {", 1)[1].split("}", 1)[0]
+    assert "box-sizing: border-box" in rule

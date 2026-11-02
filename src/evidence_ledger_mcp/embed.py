@@ -118,13 +118,13 @@ html.el-panel mark.el-claim { cursor: pointer; }
 html:not(.el-panel) #el-card, html:not(.el-panel) .el-howto { display: none; }
 .el-toggle { font: inherit; color: var(--el-accent); background: none; cursor: pointer;
   border: 1px solid var(--el-line); border-radius: 4px; padding: 0 0.5rem; margin-left: 0.5rem; }
-#el-card { position: fixed; left: 0; right: 0; bottom: 0; max-height: 70vh; z-index: 2000;
+#el-card { box-sizing: border-box; position: fixed; left: 0; right: 0; bottom: 0;
+  max-height: 70vh; z-index: 2000;
   overflow-y: auto; background: var(--el-panel); color: var(--el-fg);
   border-top: 1px solid var(--el-line); border-radius: 12px 12px 0 0;
   box-shadow: 0 -6px 24px rgba(0, 0, 0, 0.18); padding: 0.8rem 1rem 1.2rem;
   font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
 #el-card[hidden] { display: none; }
-#el-card { box-sizing: border-box; }
 #el-card:focus { outline: none; }
 #el-card header { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem;
   color: var(--el-muted); font-size: 0.8rem; margin-bottom: 0.5rem; }
@@ -555,7 +555,9 @@ def _bare(anchor: object, note: str) -> str:
     if not isinstance(anchor, dict):
         return ""
     out = summary._prose("note", "Marker", anchor.get("marker"))
-    return out + (f'<p class="note">{note}</p>' if "exact" in anchor else "")
+    return f'<p class="label">In the work</p>{out}' + (
+        f'<p class="note">{note}</p>' if "exact" in anchor else ""
+    )
 
 
 def _card(

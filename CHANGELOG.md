@@ -6,7 +6,7 @@ Changes to the MCP server package `evidence-ledger-mcp`. Schema changes are rele
 
 ### Fixed
 
-- `embed_ledger` panel: when the records of a claim have different anchors, every record now has its own "In the work" block directly above it, and the panel no longer overlaps the text on pages without a global `box-sizing: border-box` (#63).
+- `embed_ledger` panel and `summarize_ledger`: when the records of a claim have different anchors, every record now has its own "In the work" block directly above it, and the panel no longer overlaps the text on pages without a global `box-sizing: border-box` (#63).
 
 ## [0.5.0] - 2026-11-01
 

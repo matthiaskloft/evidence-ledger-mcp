@@ -1,11 +1,11 @@
 {
   "repository": "https://github.com/matthiaskloft/evidence-ledger-schema",
-  "version": "0.4.0",
-  "tag": "schema-v0.4.0",
-  "revision": "8aca0a29c294364ff14782360f5fa573f9f12654",
+  "version": "0.5.1",
+  "tag": "schema-v0.5.1",
+  "revision": "526a7a3f4a65c8534b9daf6df498222a8b2d62f9",
   "files": {
-    "evidence-ledger.schema.json": "c7208351e9cabb9ffdf359d896b4088a17698d0ddfc6a7b8313ba1005d104bf8",
-    "LICENSE": "c3c58665910e64a62aa52852c1a61a8850f6c7f49fa3acaee674c0423f8c29b2",
-    "CHANGELOG.md": "aed716b3ce6351850a799174c9fc151c0079a0ded3e037a602172af2631e5d21"
+    "evidence-ledger.schema.json": "2b98a11d55ce4a5965f46a61bbdca1643e712ef3d6f8f5220c33bee00ffe447f",
+    "LICENSE": "57fa381043db0d9960f3851590f3705063de0fd629d3e55db70b70267a79c41f",
+    "CHANGELOG.md": "ea55bd382920527771a1ac60498843870c2ea51b96f90cb01614cf1e3061646b"
   }
 }

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import hashlib
 import json
 import os
@@ -19,6 +20,81 @@ Record = dict[str, Any]
 EVIDENCE_FIELDS = ("locator", "quote", "quote_hash", "justification")
 # Fields every record of a claim shares.
 CLAIM_FIELDS = ("claim", "importance")
+
+
+def evidence_fields(record: Record) -> tuple[str, ...]:
+    kind = record.get("evidence_type", "reference")
+    location = {"analysis_output": "analysis", "source_code": "source_code"}.get(
+        str(kind), "locator"
+    )
+    return (location, "quote", "quote_hash", "justification")
+
+
+def relocate_artifacts(record: Record, source: str, target: str) -> Record:
+    """Keep relative artifact paths pointing at the same files after relocation."""
+    relocated = copy.deepcopy(record)
+    source_directory = Path(source).resolve().parent
+    target_directory = Path(target).resolve().parent
+    analysis = relocated.get("analysis")
+    artifacts = [relocated.get("source_code")]
+    if isinstance(analysis, dict):
+        artifacts += [analysis.get("report"), analysis.get("script")]
+    for artifact in artifacts:
+        if not isinstance(artifact, dict) or not isinstance(artifact.get("path"), str):
+            continue
+        if not artifact["path"].strip() or re.match(
+            r"[A-Za-z][A-Za-z0-9+.-]*://", artifact["path"]
+        ):
+            continue
+        original = Path(artifact["path"])
+        if original.is_absolute() or source_directory == target_directory:
+            continue
+        original = (source_directory / original).resolve()
+        try:
+            artifact["path"] = os.path.relpath(original, target_directory)
+        except ValueError:
+            # Windows cannot express a relative path between different drives.
+            artifact["path"] = str(original)
+    return relocated
+
+
+def dependency_problems(records: list[Record]) -> list[str]:
+    """Check dependency existence and cycles, including withdrawn records."""
+    ids = {r["id"] for r in records if isinstance(r.get("id"), str)}
+    graph: dict[str, list[str]] = {}
+    problems: list[str] = []
+    seen: set[str] = set()
+    for record in records:
+        rid = record.get("id")
+        dependencies = record.get("derived_from", [])
+        if not isinstance(rid, str):
+            continue
+        if rid in seen:
+            problems.append(f"{rid}: duplicate id in dependency context")
+        seen.add(rid)
+        if not isinstance(dependencies, list):
+            continue
+        edges = [d for d in dependencies if isinstance(d, str)]
+        graph.setdefault(rid, []).extend(edges)
+        for dependency in edges:
+            if dependency not in ids:
+                problems.append(f"{rid}: derived_from references missing record {dependency}")
+    done: set[str] = set()
+    active: set[str] = set()
+    for root in graph:
+        stack = [(root, False)]
+        while stack:
+            node, leaving = stack.pop()
+            if leaving:
+                active.discard(node)
+                done.add(node)
+            elif node in active:
+                problems.append(f"{node}: derived_from contains a cycle")
+            elif node not in done:
+                active.add(node)
+                stack.append((node, True))
+                stack.extend((child, False) for child in graph.get(node, []))
+    return problems
 
 
 def normalize(text: str, version: str = "n2") -> str:
@@ -211,6 +287,8 @@ def _check(header: dict[str, Any], record: Record, others: list[Record]) -> None
     quote fields, or disagrees with another record of its claim."""
     if errors := record_errors(record):
         raise ValueError("Invalid record: " + "; ".join(errors))
+    if errors := dependency_problems([*others, record]):
+        raise ValueError("Invalid dependencies: " + "; ".join(errors))
     runs = windows(record)
     overlaps = source_overlaps(record)
     overlaps += [
@@ -234,12 +312,20 @@ def _check(header: dict[str, Any], record: Record, others: list[Record]) -> None
                 raise ValueError(f"{field} differs from {other.get('id')} on {record['claim_id']}")
 
 
+def _related_paths(path: str, related: list[str] | None) -> Iterator[str]:
+    seen = {Path(path).resolve()}
+    for other in related or []:
+        resolved = Path(other).resolve()
+        if resolved not in seen:
+            seen.add(resolved)
+            yield other
+
+
 def _others(path: str, related: list[str] | None) -> list[Record]:
     """Records of the related ledgers, leaving out `path` itself."""
     records: list[Record] = []
-    for other in related or []:
-        if not _same_file(path, other):
-            records += read(other)[1]
+    for other in _related_paths(path, related):
+        records += read(other)[1]
     return records
 
 
@@ -292,11 +378,23 @@ def move_record(path: str, id: str, to: str, related: list[str] | None = None) -
     to_header, to_records = read(to)
     if any(r.get("id") == id for r in to_records):
         raise ValueError(f"{id} already exists in {to}")
-    _check(to_header, moved, to_records + _others(to, related))
+    remaining = [r for r in records if r is not moved]
+    moved = relocate_artifacts(moved, path, to)
+    target_context = to_records + _others(
+        to, [other for other in related or [] if not _same_file(path, other)]
+    )
+    if any(_same_file(path, other) for other in related or []):
+        target_context += remaining
+    _check(to_header, moved, target_context)
+    source_context = remaining + _others(path, related)
+    if any(_same_file(to, other) for other in related or []):
+        source_context.append(moved)
+    if errors := dependency_problems(source_context):
+        raise ValueError("Invalid dependencies after move: " + "; ".join(errors))
     _rewrite_all(
         [
             (to, to_header, [*to_records, moved]),
-            (path, header, [r for r in records if r is not moved]),
+            (path, header, remaining),
         ]
     )
     return moved
@@ -429,7 +527,7 @@ def find_records(
         if text is not None and text.casefold() not in str(record.get("claim", "")).casefold():
             continue
         if missing_evidence and (
-            not record.get("contestable", True) or all(f in record for f in EVIDENCE_FIELDS)
+            not record.get("contestable", True) or all(f in record for f in evidence_fields(record))
         ):
             continue
         found.append(record)
@@ -445,7 +543,7 @@ def validate_ledger(path: str, related: list[str] | None = None) -> list[str]:
     if header is None:
         return ["line 1: not a ledger header"]
     problems = [f"header: {e}" for e in header_errors(header)]
-    if header.get("schema_version") != schema_version():
+    if header.get("schema_version") not in ("0.5.0", schema_version()):
         problems.append(
             f"header: schema_version {header.get('schema_version')} "
             f"differs from the server's {schema_version()}"
@@ -453,6 +551,7 @@ def validate_ledger(path: str, related: list[str] | None = None) -> list[str]:
     from evidence_ledger_mcp.export import export_level_problems  # export imports this module
 
     level = header.get("level")
+    dependency_records: list[Record] = []
     seen_ids: set[str] = set()
     importance: dict[str, set[str | None]] = {}
     claims: dict[str, set[str]] = {}
@@ -467,6 +566,7 @@ def validate_ledger(path: str, related: list[str] | None = None) -> list[str]:
         if not isinstance(record, dict):
             problems.append(f"line {number}: not a record")
             continue
+        dependency_records.append(record)
         label = str(record.get("id", f"line {number}"))
         # A locator export drops `quote`, which the record schema requires for contestable
         # records; a placeholder lets the rest of the schema apply, and the level's own
@@ -521,10 +621,9 @@ def validate_ledger(path: str, related: list[str] | None = None) -> list[str]:
     own_claims = {k: len(v) for k, v in claims.items()}
     own_importance = {k: len(v) for k, v in importance.items()}
     shared: set[str] = set()
-    for other in related or []:
-        if _same_file(path, other):
-            continue
+    for other in _related_paths(path, related):
         rows = read(other)[1]
+        dependency_records += rows
         used = {r.get("id") for r in rows}
         problems += [
             f"{label}: id also used in {other}" for label in sorted(seen_ids & used, key=str)
@@ -543,7 +642,7 @@ def validate_ledger(path: str, related: list[str] | None = None) -> list[str]:
             problems.append(f"{claim}: records disagree on claim text across related ledgers")
         if len(importance.get(claim, ())) > max(1, own_importance.get(claim, 0)):
             problems.append(f"{claim}: records disagree on importance across related ledgers")
-    return problems
+    return problems + dependency_problems(dependency_records)
 
 
 def withdraw_record(path: str, id: str, reason: str) -> Record:

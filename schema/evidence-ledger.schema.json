@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://matthiaskloft.github.io/evidence-ledger-mcp/schema/0.4.0/evidence-ledger.schema.json",
-  "title": "Evidence ledger record (v0.4.0, draft)",
-  "description": "One record links a claim in a work (a manuscript, software or other) to the source passage that backs it. A ledger is a list of records, optionally preceded by a header ($defs/header); see README.md for the file shapes.",
+  "$id": "https://raw.githubusercontent.com/matthiaskloft/evidence-ledger-schema/schema-v0.5.1/evidence-ledger.schema.json",
+  "title": "Evidence ledger record (v0.5.1)",
+  "description": "One record links a claim to a reference passage, analysis result, or implementation. See README.md for ledger file shapes.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -132,6 +132,54 @@
           }
         }
       ]
+    },
+    "file_path": {
+      "$ref": "#/$defs/text",
+      "pattern": "^(?![A-Za-z][A-Za-z0-9+.-]*://)",
+      "description": "Local file path, absolute or relative to the ledger file. Use url for remote files."
+    },
+    "artifact_url": {
+      "type": "string",
+      "pattern": "^https://[^/\\s?#]+(?:[/?#]\\S*)?(?![\\s\\S])",
+      "description": "HTTPS link identifying a specific file; prefer an immutable revision. Hash the file contents, not a hosting service's HTML wrapper."
+    },
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sha256",
+        "locator"
+      ],
+      "oneOf": [
+        {
+          "required": [
+            "path"
+          ]
+        },
+        {
+          "required": [
+            "url"
+          ]
+        }
+      ],
+      "properties": {
+        "path": {
+          "$ref": "#/$defs/file_path"
+        },
+        "url": {
+          "$ref": "#/$defs/artifact_url"
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$",
+          "minLength": 64,
+          "maxLength": 64
+        },
+        "locator": {
+          "$ref": "#/$defs/text"
+        }
+      },
+      "description": "Primary evidence file, identified by exactly one of path or url. sha256 hashes exact file bytes; locator identifies a result or code symbol and lines."
     }
   },
   "properties": {
@@ -207,7 +255,8 @@
       }
     },
     "key": {
-      "$ref": "#/$defs/text"
+      "$ref": "#/$defs/text",
+      "description": "Citation key for a reference, or a local identifier for an analysis or implementation."
     },
     "doi": {
       "type": "string",
@@ -294,7 +343,8 @@
       }
     },
     "quote": {
-      "$ref": "#/$defs/text"
+      "$ref": "#/$defs/text",
+      "description": "Exact reference passage, result excerpt (including numbers or table rows), or code excerpt. Never paraphrase the evidence."
     },
     "quote_prefix": {
       "$ref": "#/$defs/text",
@@ -331,7 +381,9 @@
         "pdf",
         "web",
         "human",
-        "memory"
+        "memory",
+        "analysis_output",
+        "source_code"
       ]
     },
     "found_via": {
@@ -411,22 +463,76 @@
     },
     "derived_from": {
       "type": "array",
+      "uniqueItems": true,
       "items": {
-        "type": "string"
+        "type": "string",
+        "pattern": "^R-[0-9]{4,}$"
       },
-      "description": "Reserved: own inferences"
-    },
-    "evidence_kind": {
-      "enum": [
-        "literature",
-        "analysis_output"
-      ],
-      "default": "literature",
-      "description": "Reserved: claims about own results"
+      "description": "Optional IDs of evidence records used by this analysis. References must exist in this ledger and form an acyclic graph without self references."
     },
     "quote_focus": {
       "$ref": "#/$defs/text",
       "description": "Phrase carrying the claim within quote; must occur exactly once, cover whole whitespace-delimited words, and contain at most 25 words. Source text: removed from masked and locator exports."
+    },
+    "evidence_type": {
+      "enum": [
+        "reference",
+        "analysis_output",
+        "source_code"
+      ],
+      "default": "reference",
+      "description": "Optional; omission means reference. Choose by what supports the claim, regardless of file format: what a source states, a computed or observed result, or the implementation itself."
+    },
+    "analysis": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "report"
+      ],
+      "properties": {
+        "report": {
+          "$ref": "#/$defs/artifact"
+        },
+        "script": {
+          "type": "object",
+          "additionalProperties": false,
+          "oneOf": [
+            {
+              "required": [
+                "path"
+              ]
+            },
+            {
+              "required": [
+                "url"
+              ]
+            }
+          ],
+          "properties": {
+            "path": {
+              "$ref": "#/$defs/file_path"
+            },
+            "url": {
+              "$ref": "#/$defs/artifact_url"
+            },
+            "locator": {
+              "$ref": "#/$defs/text",
+              "description": "Optional location within the generating script, such as a function, notebook cell, or line range. Location only, never a code excerpt."
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$",
+              "minLength": 64,
+              "maxLength": 64
+            }
+          }
+        }
+      },
+      "description": "Primary report or output and optional generating script. Prefer a rendered report; when script is omitted, the report must identify its source script."
+    },
+    "source_code": {
+      "$ref": "#/$defs/artifact",
+      "description": "Implementation file; locator names the symbol and optionally lines. Exact byte hash pins the file."
     }
   },
   "allOf": [
@@ -440,7 +546,6 @@
       },
       "then": {
         "required": [
-          "locator",
           "quote",
           "quote_hash",
           "justification"
@@ -453,28 +558,126 @@
       }
     },
     {
-      "anyOf": [
-        {
-          "required": [
-            "doi"
-          ]
-        },
-        {
-          "required": [
-            "isbn"
-          ]
-        },
-        {
-          "required": [
-            "url"
-          ]
-        },
-        {
-          "required": [
-            "no_identifier_reason"
+      "if": {
+        "required": [
+          "evidence_type"
+        ],
+        "properties": {
+          "evidence_type": {
+            "const": "analysis_output"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "analysis"
+        ],
+        "properties": {
+          "source_code": false,
+          "locator": false
+        }
+      },
+      "else": {
+        "properties": {
+          "analysis": false,
+          "derived_from": false
+        }
+      }
+    },
+    {
+      "if": {
+        "required": [
+          "evidence_type"
+        ],
+        "properties": {
+          "evidence_type": {
+            "const": "source_code"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "source_code"
+        ],
+        "properties": {
+          "locator": false
+        }
+      },
+      "else": {
+        "properties": {
+          "source_code": false
+        }
+      }
+    },
+    {
+      "if": {
+        "not": {
+          "anyOf": [
+            {
+              "required": [
+                "evidence_type"
+              ],
+              "properties": {
+                "evidence_type": {
+                  "const": "analysis_output"
+                }
+              }
+            },
+            {
+              "required": [
+                "evidence_type"
+              ],
+              "properties": {
+                "evidence_type": {
+                  "const": "source_code"
+                }
+              }
+            }
           ]
         }
-      ]
+      },
+      "then": {
+        "allOf": [
+          {
+            "anyOf": [
+              {
+                "required": [
+                  "doi"
+                ]
+              },
+              {
+                "required": [
+                  "isbn"
+                ]
+              },
+              {
+                "required": [
+                  "url"
+                ]
+              },
+              {
+                "required": [
+                  "no_identifier_reason"
+                ]
+              }
+            ]
+          },
+          {
+            "if": {
+              "properties": {
+                "contestable": {
+                  "const": true
+                }
+              }
+            },
+            "then": {
+              "required": [
+                "locator"
+              ]
+            }
+          }
+        ]
+      }
     }
   ]
 }

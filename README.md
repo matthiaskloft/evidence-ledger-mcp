@@ -2,7 +2,7 @@
 
 [![PyPI](https://img.shields.io/pypi/v/evidence-ledger-mcp)](https://pypi.org/project/evidence-ledger-mcp/)
 [![Release](https://img.shields.io/github/v/release/matthiaskloft/evidence-ledger-mcp?filter=v*&label=release)](https://github.com/matthiaskloft/evidence-ledger-mcp/releases)
-[![Schema](https://img.shields.io/badge/schema-v0.4.0-blue)](https://github.com/matthiaskloft/evidence-ledger-schema/releases/tag/schema-v0.4.0)
+[![Schema](https://img.shields.io/badge/schema-v0.5.1-blue)](https://github.com/matthiaskloft/evidence-ledger-schema/releases/tag/schema-v0.5.1)
 
 > **Under active development.** Both the schema and the server may change in breaking ways between versions until v1.0. Pin the version you use.
 
@@ -10,7 +10,7 @@ An [MCP](https://modelcontextprotocol.io) server through which agents keep an ev
 
 It is built for academics: authors and co-authors who write with LLMs and want every citation to stay checkable. The ledger format is an open schema, so a graduate school could require it for theses, and a journal could adopt it for submissions or build its own standard on it.
 
-**Supported schema: v0.4.0 · [standalone schema repository](https://github.com/matthiaskloft/evidence-ledger-schema)** ([how schema versions are pinned](docs/schema.md)).
+**Supported schema: v0.5.1 · [standalone schema repository](https://github.com/matthiaskloft/evidence-ledger-schema)** ([how schema versions are pinned](docs/schema.md)).
 
 The MCP server and its associated documentation use the [MIT licence](LICENSE). The bundled schema uses [CC BY 4.0](schema/LICENSE), with attribution to Matthias Kloft. These licences do not cover ledger contents or third-party source material.
 
@@ -20,17 +20,20 @@ A ledger is a running record, like an accounting book, where each entry is writt
 
 ## The evidence ledger schema
 
-Every ledger this server writes follows the **[evidence ledger schema](https://github.com/matthiaskloft/evidence-ledger-schema#readme)** (JSON Schema, draft 2020-12), currently **v0.4.0**. The schema is the contract: any tool, script or person can read, validate and check a ledger with it, with or without this server. Its README documents the purpose, the file shapes, every record field, quote hashing, a minimal example and the sources the fields draw on. The server bundles a pinned copy in [`schema/`](schema/) and reports the supported version through `schema_info`.
+Every ledger this server writes follows the **[evidence ledger schema](https://github.com/matthiaskloft/evidence-ledger-schema#readme)** (JSON Schema, draft 2020-12), currently **v0.5.1**. The schema is the contract: any tool, script or person can read, validate and check a ledger with it, with or without this server. Its README documents the purpose, the file shapes, every record field, quote hashing, a minimal example and the sources the fields draw on. The server bundles a pinned copy in [`schema/`](schema/) and reports the supported version through `schema_info`.
 
-A ledger is a header (`schema_version`, `work` and optional notes) followed by records. Each record links one claim in the work to one source passage:
+A ledger is a header (`schema_version`, `work` and optional notes) followed by records. Records can link claims to reference passages, analysis outputs, or source code (see [supported evidence](docs/schema.md#supported-evidence)). Each record links one claim in the work to its evidence:
 
 | Field | Required | Content |
 | --- | --- | --- |
 | `id`, `claim_id` | yes | Record and claim IDs; the server assigns them. Records about the same claim share a `claim_id`. |
 | `claim`, `claim_type`, `contestable` | yes | The claim, its type (`empirical`, `definition`, `method`, `background`) and whether it needs full evidence; `false` needs a `contestable_reason`. |
 | `anchor` | yes | Where the claim sits in the work: its `exact` text (with optional `prefix`/`suffix`) or a `marker`. |
-| `key` | yes | The source's citation key, with `doi`, `isbn` or `url`, or a `no_identifier_reason`. |
-| `locator` | | Where in the source: `page`, `section`, `figure` or `table`. |
+| `key` | yes | The evidence's key; references also need `doi`, `isbn` or `url`, or a `no_identifier_reason`. |
+| `evidence_type` | | `reference` (default), `analysis_output`, or `source_code`. |
+| `analysis`, `source_code` | by type | Report or implementation artifact: path or HTTPS URL, exact-byte hash and locator; analysis may also identify a generating script. |
+| `derived_from` | | Analysis dependencies as existing record IDs; cycles are refused. |
+| `locator` | references | Where in the source: `page`, `section`, `figure` or `table`. |
 | `quote`, `quote_focus` | | A short quote from the source, and the phrase within it that carries the claim; `quote_hash` is computed by the server. |
 | `relation`, `justification` | `relation` | How the source bears on the claim (`supports`, `partially_supports`, `background`, `method`, `contrasts`) and why. |
 | `retrieved_via`, `provenance` | yes | How the passage was found, and who assessed it (person or agent and model), when, and against which revision of the work. |

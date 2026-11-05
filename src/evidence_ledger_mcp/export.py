@@ -164,10 +164,19 @@ def export_ledger(
     header, records = ledger.read(path)
     header = {**header, "level": level, "max_words": max_words}
     kept = [
-        export_record(r, level, max_words)
+        ledger.relocate_artifacts(export_record(r, level, max_words), path, out)
         for r in records
         if include_withdrawn or "withdrawn" not in r
     ]
+    omitted = {r.get("id") for r in records if "withdrawn" in r and not include_withdrawn}
+    for record in kept:
+        dependencies = record.get("derived_from", [])
+        if isinstance(dependencies, list) and any(
+            isinstance(dependency, str) and dependency in omitted for dependency in dependencies
+        ):
+            raise ValueError(
+                f"{record.get('id')}: export omits a dependency; use include_withdrawn=True"
+            )
     if problems := publication_problems(header, kept, records, level, max_words):
         raise ValueError("Publication check failed: " + "; ".join(problems))
     with open(out, "x", encoding="utf-8", newline="\n") as handle:

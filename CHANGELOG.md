@@ -4,6 +4,10 @@ Changes to the MCP server package `evidence-ledger-mcp`. Schema changes are rele
 
 ## [Unreleased]
 
+### Changed
+
+- Adopt schema v0.5.1, adding analysis-output and source-code records, dependency existence and cycle checks, evidence-specific completeness checks, artifact metadata in summaries, and import steps from v0.4.0 and v0.5.0. Preserve quote masking and leakage checks for all evidence types. Keep artifact targets stable across moves, imports and exports; refuse exports that omit withdrawn dependencies and reject duplicate IDs throughout dependency contexts.
+
 ### Fixed
 
 - `embed_ledger` panel and `summarize_ledger`: when the records of a claim have different anchors, every record now has its own "In the work" block directly above it, and the panel no longer overlaps the text on pages without a global `box-sizing: border-box` (#63).

@@ -436,7 +436,9 @@ def _rows(records: list[Any], include_withdrawn: bool) -> list[tuple[str, ledger
     return [
         (str(r.get("id", f"record {n}")), r)
         for n, r in enumerate(records, 1)
-        if isinstance(r, dict) and (include_withdrawn or "withdrawn" not in r)
+        if isinstance(r, dict)
+        and r.get("evidence_type", "reference") == "reference"
+        and (include_withdrawn or "withdrawn" not in r)
     ]
 
 

@@ -15,6 +15,7 @@ from evidence_ledger_mcp.ledger import (
     _dumps,
     _next_number,
     quote_hash,
+    relocate_artifacts,
     validate_ledger,
 )
 from evidence_ledger_mcp.schema import header_errors, schema_version
@@ -94,12 +95,20 @@ def _unchanged(header: Header, records: Records) -> tuple[Header, Records]:
     return header, records
 
 
-# Ordered upgrade steps. 0.2.0 to 0.3.0 added the header and the optional `note`; 0.3.0 to 0.4.0
-# added `quote_focus`, the n2 hash (n1 hashes stay checkable) and the export header fields. All
-# are additions, so no record changes. A pre-schema list starts at the first step.
+def _evidence_types(header: Header, records: Records) -> tuple[Header, Records]:
+    for record in records:
+        if record.get("evidence_kind") == "literature":
+            record.pop("evidence_kind")
+            record.setdefault("evidence_type", "reference")
+    return header, records
+
+
+# Legacy analysis records need artifact metadata supplied by the user; validation reports it.
 STEPS: list[Step] = [
     ("0.2.0", "0.3.0", _unchanged),
     ("0.3.0", "0.4.0", _unchanged),
+    ("0.4.0", "0.5.0", _evidence_types),
+    ("0.5.0", "0.5.1", _unchanged),
 ]
 
 
@@ -175,7 +184,7 @@ def import_ledger(source: str, path: str, work: dict[str, Any] | None = None) ->
     if errors := header_errors(header):
         raise ValueError("Invalid header: " + "; ".join(errors))
 
-    imported: list[Record] = records
+    imported: list[Record] = [relocate_artifacts(record, source, path) for record in records]
     ids = [str(r["id"]) for r in imported if "id" in r]
     claim_ids = [str(r["claim_id"]) for r in imported if "claim_id" in r]
     for record in imported:

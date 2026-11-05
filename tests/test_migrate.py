@@ -92,7 +92,7 @@ def test_yaml_with_unquoted_dates(tmp_path: Path) -> None:
         "path": target,
         "records": 3,
         "from_version": "0.3.0",
-        "steps": ["0.3.0→0.4.0"],
+        "steps": ["0.3.0→0.4.0", "0.4.0→0.5.0", "0.5.0→0.5.1"],
         "problems": [],
     }
     header, records = ledger.read(target)
@@ -229,7 +229,7 @@ def write_jsonl(path: Path, lines: list[object]) -> str:
     return str(path)
 
 
-ALL_STEPS = ["0.2.0→0.3.0", "0.3.0→0.4.0"]
+ALL_STEPS = ["0.2.0→0.3.0", "0.3.0→0.4.0", "0.4.0→0.5.0", "0.5.0→0.5.1"]
 
 
 def test_jsonl_source_with_older_version(tmp_path: Path) -> None:

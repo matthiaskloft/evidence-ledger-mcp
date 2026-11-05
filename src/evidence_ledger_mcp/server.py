@@ -18,7 +18,13 @@ BUG_REPORT_URL = (
 mcp = FastMCP(
     "evidence-ledger",
     instructions="Pass ledger paths as absolute paths; relative paths resolve against the "
-    "server's working directory. Source text goes only into the quote fields (`quote`, "
+    "server's working directory. Evidence types: omit evidence_type for references, or use "
+    "analysis_output with analysis.report and optional analysis.script, or source_code with "
+    "source_code. Artifacts require exactly one path or HTTPS url, exact-byte sha256 and a "
+    "locator (script locator and hash are optional). Artifact paths resolve relative to the "
+    "ledger file. Verify file hashes and excerpts against the actual files; schema validation "
+    "does not fetch or execute artifacts. derived_from lists existing record IDs for analysis "
+    "dependencies and must be acyclic. Source text goes only into the quote fields (`quote`, "
     "`quote_prefix`, `quote_suffix`, `quote_focus`). Write every other field (`justification`, "
     "`locator`, `note`, and the header's `description` and `notes`) in your own words, because "
     "they are exported at every level; a run of 24 or more letters and digits from a quote there "

@@ -11,7 +11,6 @@ from typing import Any
 from evidence_ledger_mcp import embed, fetch, ledger
 
 HTML_SUFFIXES = (".html", ".htm")
-ENTRY_FIELDS = ("locator", "quote", "justification")
 _BIB_START = re.compile(r"@\s*(\w+)\s*([{(])")
 _BIB_KEY = re.compile(r"\s*([^,\s]+)\s*,")
 _BIB_FIELD = re.compile(r"([A-Za-z][\w-]*)\s*=\s*")
@@ -215,7 +214,12 @@ def check_ledger(
         "missing_evidence": {
             label: missing
             for label, r in rows
-            if r.get("contestable", True) and (missing := [f for f in ENTRY_FIELDS if f not in r])
+            if r.get("contestable", True)
+            and (
+                missing := [
+                    f for f in ledger.evidence_fields(r) if f != "quote_hash" and f not in r
+                ]
+            )
         },
         "claims_without_records": [
             claim for claim, group in all_claims.items() if all("withdrawn" in r for r in group)
@@ -233,7 +237,11 @@ def check_ledger(
     if keys is not None:
         missing_keys: dict[str, list[str]] = {}
         for label, record in rows:
-            if isinstance(record.get("key"), str) and record["key"] not in keys:
+            if (
+                record.get("evidence_type", "reference") == "reference"
+                and isinstance(record.get("key"), str)
+                and record["key"] not in keys
+            ):
                 missing_keys.setdefault(record["key"], []).append(label)
         gaps["keys_missing_from_bibliography"] = missing_keys
     if revision is not None:

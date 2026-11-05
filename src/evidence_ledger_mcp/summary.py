@@ -13,7 +13,17 @@ from evidence_ledger_mcp import export, ledger
 from evidence_ledger_mcp.ledger import Record
 
 DATA_ID = "evidence-ledger-data"
-RELINK_FIELDS = ("id", "key", "doi", "isbn", "url", "locator", "quote", "quote_hash")
+RELINK_FIELDS = (
+    "id",
+    "key",
+    "doi",
+    "isbn",
+    "url",
+    "locator",
+    "quote",
+    "quote_hash",
+    "evidence_type",
+)
 LOCATOR_FIELDS = ("page", "section", "figure", "table")
 QUOTES_SHOWN = {
     "full": "complete",
@@ -209,7 +219,9 @@ def _record(record: Record, key_href: str | None = None) -> str:
         [
             ("source", _identifiers(record)),
             ("locator", _locator(record)),
-            ("evidence kind", _e(record.get("evidence_kind", ""))),
+            ("evidence type", _e(record.get("evidence_type", "reference"))),
+            ("analysis", _e(record.get("analysis", ""))),
+            ("source code", _e(record.get("source_code", ""))),
             ("quote hash", _e(record.get("quote_hash", ""))),
             ("retrieved via", _e(record.get("retrieved_via", ""))),
             (

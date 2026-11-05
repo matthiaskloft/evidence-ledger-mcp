@@ -48,8 +48,8 @@ def link_map_errors(data: Any) -> list[str]:
 
 
 def schema_version() -> str:
-    """The schema version, read from its `$id` (`.../schema/X.Y.Z/...`)."""
-    match = re.search(r"/schema/(\d+\.\d+\.\d+)/", load_schema()["$id"])
+    """The schema version, read from its `$id` (legacy or versioned upstream namespace)."""
+    match = re.search(r"/(?:schema/|schema-v)(\d+\.\d+\.\d+)/", load_schema()["$id"])
     if match is None:
         raise ValueError("schema $id carries no version")
     return match[1]

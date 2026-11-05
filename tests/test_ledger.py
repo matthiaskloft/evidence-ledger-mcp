@@ -688,8 +688,14 @@ def test_validate_ledger_reports_ids_shared_with_related(pair: tuple[str, str]) 
     with open(second, "a", encoding="utf-8", newline="\n") as handle:
         handle.write(json.dumps(ledger.read(first)[1][0]) + "\n")
     assert ledger.validate_ledger(first) == []
-    assert ledger.validate_ledger(first, [second]) == [f"R-0001: id also used in {second}"]
-    assert ledger.validate_ledger(second, [first]) == [f"R-0001: id also used in {first}"]
+    assert ledger.validate_ledger(first, [second]) == [
+        f"R-0001: id also used in {second}",
+        "R-0001: duplicate id in dependency context",
+    ]
+    assert ledger.validate_ledger(second, [first]) == [
+        f"R-0001: id also used in {first}",
+        "R-0001: duplicate id in dependency context",
+    ]
     assert ledger.validate_ledger(first, [first]) == []
 
 

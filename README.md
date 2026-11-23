@@ -2,7 +2,7 @@
 
 [![PyPI](https://img.shields.io/pypi/v/evidence-ledger-mcp)](https://pypi.org/project/evidence-ledger-mcp/)
 [![Release](https://img.shields.io/github/v/release/matthiaskloft/evidence-ledger-mcp?filter=v*&label=release)](https://github.com/matthiaskloft/evidence-ledger-mcp/releases)
-[![Schema](https://img.shields.io/badge/schema-v0.5.1-blue)](https://github.com/matthiaskloft/evidence-ledger-schema/releases/tag/schema-v0.5.1)
+[![Schema](https://img.shields.io/badge/schema-v0.5.2-blue)](https://github.com/matthiaskloft/evidence-ledger-schema/releases/tag/schema-v0.5.2)
 
 > **Under active development.** Both the schema and the server may change in breaking ways between versions until v1.0. Pin the version you use.
 
@@ -10,7 +10,7 @@ An [MCP](https://modelcontextprotocol.io) server through which agents keep an ev
 
 It is built for academics: authors and co-authors who write with LLMs and want every citation to stay checkable. The ledger format is an open schema, so a graduate school could require it for theses, and a journal could adopt it for submissions or build its own standard on it.
 
-**Supported schema: v0.5.1 · [standalone schema repository](https://github.com/matthiaskloft/evidence-ledger-schema)** ([how schema versions are pinned](docs/schema.md)).
+**Supported schema: v0.5.2 · [standalone schema repository](https://github.com/matthiaskloft/evidence-ledger-schema)** ([how schema versions are pinned](docs/schema.md)).
 
 The MCP server and its associated documentation use the [MIT licence](LICENSE). The bundled schema uses [CC BY 4.0](schema/LICENSE), with attribution to Matthias Kloft. These licences do not cover ledger contents or third-party source material.
 
@@ -20,7 +20,7 @@ A ledger is a running record, like an accounting book, where each entry is writt
 
 ## The evidence ledger schema
 
-Every ledger this server writes follows the **[evidence ledger schema](https://github.com/matthiaskloft/evidence-ledger-schema#readme)** (JSON Schema, draft 2020-12), currently **v0.5.1**. The schema is the contract: any tool, script or person can read, validate and check a ledger with it, with or without this server. Its README documents the purpose, the file shapes, every record field, quote hashing, a minimal example and the sources the fields draw on. The server bundles a pinned copy in [`schema/`](schema/) and reports the supported version through `schema_info`.
+Every ledger this server writes follows the **[evidence ledger schema](https://github.com/matthiaskloft/evidence-ledger-schema#readme)** (JSON Schema, draft 2020-12), currently **v0.5.2**. The schema is the contract: any tool, script or person can read, validate and check a ledger with it, with or without this server. Its README documents the purpose, the file shapes, every record field, quote hashing, a minimal example and the sources the fields draw on. The server bundles a pinned copy in [`schema/`](schema/) and reports the supported version through `schema_info`.
 
 A ledger is a header (`schema_version`, `work` and optional notes) followed by records. Records can link claims to reference passages, analysis outputs, or source code (see [supported evidence](docs/schema.md#supported-evidence)). Each record links one claim in the work to its evidence:
 
@@ -35,7 +35,7 @@ A ledger is a header (`schema_version`, `work` and optional notes) followed by r
 | `derived_from` | | Analysis dependencies as existing record IDs; cycles are refused. |
 | `locator` | references | Where in the source: `page`, `section`, `figure` or `table`. |
 | `quote`, `quote_focus` | | A short quote from the source, and the phrase within it that carries the claim; `quote_hash` is computed by the server. |
-| `relation`, `justification` | `relation` | How the source bears on the claim (`supports`, `partially_supports`, `background`, `method`, `contrasts`) and why. |
+| `relation`, `justification` | `relation` | How the source bears on the claim (`supports`, `partially_supports`, `background`, `method`, `contrasts`; see [the definitions](https://github.com/matthiaskloft/evidence-ledger-schema/blob/schema-v0.5.2/docs/checking-a-ledger.md#6-support-check)) and why. |
 | `retrieved_via`, `provenance` | yes | How the passage was found, and who assessed it (person or agent and model), when, and against which revision of the work. |
 | `withdrawn` | | The reason a citation was withdrawn; records are never deleted. |
 
@@ -74,13 +74,13 @@ with `provenance` such as `{"by_type": "agent", "by": "Claude Code", "model": "c
 Requires Python 3.11 or newer. The server speaks MCP over stdio. With [uv](https://docs.astral.sh/uv/), run the released version from PyPI:
 
 ```bash
-uvx --from evidence-ledger-mcp==0.4.0 evidence-ledger-mcp
+uvx --from evidence-ledger-mcp==0.6.0 evidence-ledger-mcp
 ```
 
 For example, to add it to Claude Code:
 
 ```bash
-claude mcp add evidence-ledger -- uvx --from evidence-ledger-mcp==0.4.0 evidence-ledger-mcp
+claude mcp add evidence-ledger -- uvx --from evidence-ledger-mcp==0.6.0 evidence-ledger-mcp
 ```
 
 Other MCP clients take the same command and arguments. To run a source checkout instead, use `uv sync`, then configure the client to run `uv` with arguments `run`, `--directory`, the absolute path to the checkout, and `evidence-ledger-mcp`.
@@ -93,7 +93,7 @@ Pass absolute ledger paths to tools; relative paths resolve against the server's
 | --- | --- |
 | `schema_info` | Reports the server version and the supported schema version. |
 | `create_ledger` | Creates a JSON Lines ledger with a header; `work` needs `title` and `type`. |
-| `import_ledger` | Converts a ledger of any older schema version, or a pre-schema hand-built list (YAML, JSON or JSON Lines), to a new JSON Lines ledger at the current version, keeping ids, provenance dates and quote hashes, and reports all that fails validation. |
+| `import_ledger` | Converts a ledger of any older schema version, or a pre-schema hand-built list (YAML, JSON or JSON Lines), to a new JSON Lines ledger at the current version, keeping ids, provenance dates and quote hashes, and reports all that fails validation and the `contrasts` records to review under schema v0.5.2. |
 | `add_record` | Validates and appends a record, refusing one whose `claim` or `importance` differs from another record of the same claim; takes the record and a separate `provenance` object and returns the stored record. With `related`, IDs are numbered past those of the other ledgers and the claim must agree with its records there. |
 | `update_record` | Changes fields of a record (`changes` is merged in, a null value removes a field) and recomputes the quote hash. `provenance` records the original assessment and is not changed by edits. A change to `claim` or `importance` is copied to every record of the claim, with `related` also in the other ledgers. Runs the checks of `add_record` on every affected ledger; nothing is written when one fails. |
 | `update_records` | The batch form of `update_record` (also with `related`): `updates` is a list of `{"id", "changes"}` applied in order (later items see earlier ones). Every affected record is checked, all refusals are listed together with the item index and record id, and the changed ledgers are rewritten together: all files or none (on a write error the files already replaced are restored from their original content). |

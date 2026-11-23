@@ -534,6 +534,10 @@ def find_records(
     return found
 
 
+# Older schema versions with the validation rules of the bundled one; their headers stay valid.
+SAME_RULES_VERSIONS = ("0.5.0", "0.5.1")
+
+
 def validate_ledger(path: str, related: list[str] | None = None) -> list[str]:
     """Return all problems found in the ledger, empty if it is valid. With `related` ledgers,
     also report ids this ledger shares with them and claims whose records here and there
@@ -543,7 +547,7 @@ def validate_ledger(path: str, related: list[str] | None = None) -> list[str]:
     if header is None:
         return ["line 1: not a ledger header"]
     problems = [f"header: {e}" for e in header_errors(header)]
-    if header.get("schema_version") not in ("0.5.0", schema_version()):
+    if header.get("schema_version") not in (*SAME_RULES_VERSIONS, schema_version()):
         problems.append(
             f"header: schema_version {header.get('schema_version')} "
             f"differs from the server's {schema_version()}"

@@ -92,7 +92,8 @@ def test_yaml_with_unquoted_dates(tmp_path: Path) -> None:
         "path": target,
         "records": 3,
         "from_version": "0.3.0",
-        "steps": ["0.3.0→0.4.0", "0.4.0→0.5.0", "0.5.0→0.5.1"],
+        "steps": ALL_STEPS[1:],
+        "review": [],
         "problems": [],
     }
     header, records = ledger.read(target)
@@ -229,7 +230,86 @@ def write_jsonl(path: Path, lines: list[object]) -> str:
     return str(path)
 
 
-ALL_STEPS = ["0.2.0→0.3.0", "0.3.0→0.4.0", "0.4.0→0.5.0", "0.5.0→0.5.1"]
+ALL_STEPS = [
+    "0.2.0→0.3.0",
+    "0.3.0→0.4.0",
+    "0.4.0→0.5.0",
+    "0.5.0→0.5.1",
+    "0.5.1→0.5.2",
+]
+
+
+@pytest.mark.parametrize("version", ["0.2.0", "0.3.0", "0.4.0", "0.5.0", "0.5.1", None])
+def test_contrasts_records_are_listed_for_review(tmp_path: Path, version: str | None) -> None:
+    records = [
+        record(1, 1),
+        record(2, 1, relation="contrasts"),
+        record(3, 2, relation="partially_supports"),
+        record(4, 2, relation="contrasts", withdrawn="Invented reason"),
+        record(5, 2, relation="background"),
+        record(6, 2, relation="method"),
+    ]
+    header: dict[str, Any] = {**HEADER, "schema_version": version}
+    data: object = {"ledger": header, "records": records} if version else records
+    source = write_json(tmp_path / "old.json", data)
+    target = str(tmp_path / "new.jsonl")
+
+    result = import_ledger(source, target, None if version else WORK)
+
+    assert [item.split(":")[0] for item in result["review"]] == ["R-0002", "R-0004"]
+    assert "partially_supports" in result["review"][0]
+    assert result["review"][1].endswith("(withdrawn)")
+    assert result["problems"] == []
+    assert ledger.read(target)[0]["schema_version"] == "0.5.2"
+    assert ledger.read(target)[1] == records
+
+
+def test_review_names_assigned_ids(tmp_path: Path) -> None:
+    bare = record(1, 1, relation="contrasts")
+    del bare["id"]
+    source = write_json(tmp_path / "old.json", {"ledger": HEADER, "records": [bare]})
+
+    result = import_ledger(source, str(tmp_path / "new.jsonl"))
+
+    assert result["review"][0].startswith("R-0001:")
+
+
+def test_review_covers_invalid_records(tmp_path: Path) -> None:
+    without_relation = record(1, 1)
+    del without_relation["relation"]
+    records = [without_relation, record(2, 1, relation="contrasts", withdrawn="")]
+    source = write_json(tmp_path / "old.json", {"ledger": HEADER, "records": records})
+
+    result = import_ledger(source, str(tmp_path / "new.jsonl"))
+
+    assert len(result["review"]) == 1
+    assert result["review"][0].startswith("R-0002:")
+    assert result["review"][0].endswith("(withdrawn)")
+    assert {p.split(":")[0] for p in result["problems"]} == {"R-0001", "R-0002"}
+
+
+def test_current_version_needs_no_review(tmp_path: Path) -> None:
+    header = {**HEADER, "schema_version": "0.5.2"}
+    records = [record(1, 1, relation="contrasts")]
+    source = write_json(tmp_path / "cur.json", {"ledger": header, "records": records})
+
+    result = import_ledger(source, str(tmp_path / "out.jsonl"))
+
+    assert result["steps"] == []
+    assert result["review"] == []
+
+
+def test_known_version_past_the_bundled_schema_is_refused(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("evidence_ledger_mcp.migrate.schema_version", lambda: "0.5.1")
+    header = {**HEADER, "schema_version": "0.5.2"}
+    source = write_json(tmp_path / "new.json", {"ledger": header, "records": RECORDS})
+    target = tmp_path / "out.jsonl"
+
+    with pytest.raises(ValueError, match="newer than this server"):
+        import_ledger(source, str(target))
+    assert not target.exists()
 
 
 def test_jsonl_source_with_older_version(tmp_path: Path) -> None:

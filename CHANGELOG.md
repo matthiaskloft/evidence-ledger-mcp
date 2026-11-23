@@ -4,9 +4,16 @@ Changes to the MCP server package `evidence-ledger-mcp`. Schema changes are rele
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-11-23
+
+### Added
+
+- The `import_ledger` result has a new field `review`: the `contrasts` records of a ledger older than v0.5.2, which narrows `contrasts` to passages that conflict with the claim. They are listed and never relabelled. The `add_record` description states the distinction from `partially_supports`.
+
 ### Changed
 
-- Adopt schema v0.5.1, adding analysis-output and source-code records, dependency existence and cycle checks, evidence-specific completeness checks, artifact metadata in summaries, and import steps from v0.4.0 and v0.5.0. Preserve quote masking and leakage checks for all evidence types. Keep artifact targets stable across moves, imports and exports; refuse exports that omit withdrawn dependencies and reject duplicate IDs throughout dependency contexts.
+- Adopt schema v0.5.2, adding analysis-output and source-code records, dependency existence and cycle checks, evidence-specific completeness checks, artifact metadata in summaries, and import steps from v0.4.0, v0.5.0 and v0.5.1. Ledgers with a v0.5.0 or v0.5.1 header remain valid. Preserve quote masking and leakage checks for all evidence types. Keep artifact targets stable across moves, imports and exports; refuse exports that omit withdrawn dependencies and reject duplicate IDs throughout dependency contexts.
+- `validate_ledger` reports a header older than v0.5.0 (a v0.4.0 ledger passed in server 0.5.0) until the ledger is converted with `import_ledger`.
 
 ### Fixed
 

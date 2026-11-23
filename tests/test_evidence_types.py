@@ -105,7 +105,7 @@ def test_related_dependencies(path: str, tmp_path: Path) -> None:
     assert ledger.validate_ledger(path, related=[other]) == []
 
 
-@pytest.mark.parametrize("version", ["0.4.0", "0.5.0"])
+@pytest.mark.parametrize("version", ["0.4.0", "0.5.0", "0.5.1"])
 def test_import_recent_versions(tmp_path: Path, version: str) -> None:
     record = {
         **RECORD,
@@ -130,11 +130,20 @@ def test_import_recent_versions(tmp_path: Path, version: str) -> None:
     assert "evidence_kind" not in records[0]
 
 
-def test_patch_version_remains_valid(path: str) -> None:
+@pytest.mark.parametrize("version", ["0.5.0", "0.5.1", "0.5.2"])
+def test_patch_version_remains_valid(path: str, version: str) -> None:
     header, _ = ledger.read(path)
-    header["schema_version"] = "0.5.0"
+    header["schema_version"] = version
     Path(path).write_text(json.dumps({"ledger": header}) + "\n", encoding="utf-8")
     assert ledger.validate_ledger(path) == []
+
+
+@pytest.mark.parametrize("version", ["0.3.0", "0.4.0", "0.5.3"])
+def test_other_versions_are_reported(path: str, version: str) -> None:
+    header, _ = ledger.read(path)
+    header["schema_version"] = version
+    Path(path).write_text(json.dumps({"ledger": header}) + "\n", encoding="utf-8")
+    assert any(f"schema_version {version} differs" in p for p in ledger.validate_ledger(path))
 
 
 @pytest.mark.parametrize("kind", ["analysis_output", "source_code"])

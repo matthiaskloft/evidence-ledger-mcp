@@ -109,7 +109,25 @@ STEPS: list[Step] = [
     ("0.3.0", "0.4.0", _unchanged),
     ("0.4.0", "0.5.0", _evidence_types),
     ("0.5.0", "0.5.1", _unchanged),
+    ("0.5.1", "0.5.2", _unchanged),
 ]
+
+# 0.5.2 narrowed `contrasts` in the documentation only. Whether a record still fits is a judgement
+# on its quote, so the step relabels nothing and the import lists the records to review.
+CONTRASTS_STEP = "0.5.1→0.5.2"
+
+
+def _review(records: Records, steps: list[str]) -> list[str]:
+    """The records whose meaning a step changed: they need a person's decision."""
+    if CONTRASTS_STEP not in steps:
+        return []
+    return [
+        f"{record['id']}: relation is contrasts, which since schema 0.5.2 covers only passages "
+        "that conflict with the claim; a passage that only qualifies it is partially_supports"
+        + (" (withdrawn)" if "withdrawn" in record else "")
+        for record in records
+        if record.get("relation") == "contrasts"
+    ]
 
 
 def _version_key(version: str) -> tuple[int, ...]:
@@ -142,6 +160,10 @@ def _upgrade(header: Header, records: Records) -> tuple[Header, Records, str | N
                 f"Unknown schema_version {source_version!r}; known versions: " + ", ".join(known)
             )
         start = known.index(source_version)
+        if start > known.index(target):
+            raise ValueError(
+                f"The source follows schema {source_version}, newer than this server's {target}"
+            )
     steps: list[str] = []
     for from_version, to_version, step in STEPS[start:]:
         header, records = step(header, records)
@@ -156,6 +178,8 @@ def import_ledger(source: str, path: str, work: dict[str, Any] | None = None) ->
 
     The source version comes from its header (`from_version` is None for a pre-schema list or a
     header without one); the upgrade steps up to this server's version are listed in `steps`.
+    `review` lists the records whose meaning a step changed; the import leaves them as they are
+    and does not store the list.
     """
     if Path(source).resolve() == Path(path).resolve():
         raise ValueError("path must differ from source")
@@ -214,5 +238,6 @@ def import_ledger(source: str, path: str, work: dict[str, Any] | None = None) ->
         "records": len(imported),
         "from_version": from_version,
         "steps": steps,
+        "review": _review(imported, steps),
         "problems": validate_ledger(path),
     }

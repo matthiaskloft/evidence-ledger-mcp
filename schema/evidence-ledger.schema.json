@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://raw.githubusercontent.com/matthiaskloft/evidence-ledger-schema/schema-v0.5.1/evidence-ledger.schema.json",
-  "title": "Evidence ledger record (v0.5.1)",
+  "$id": "https://raw.githubusercontent.com/matthiaskloft/evidence-ledger-schema/schema-v0.5.2/evidence-ledger.schema.json",
+  "title": "Evidence ledger record (v0.5.2)",
   "description": "One record links a claim to a reference passage, analysis result, or implementation. See README.md for ledger file shapes.",
   "type": "object",
   "additionalProperties": false,

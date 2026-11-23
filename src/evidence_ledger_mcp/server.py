@@ -92,8 +92,14 @@ def import_ledger(source: str, path: str, work: dict[str, Any] | None = None) ->
     and quote hashes (an older `sha256-n1` hash stays valid), and the server assigns missing ids
     and claim ids and the hash of a quote lacking one. Records that fail validation are still
     written so that they can be fixed; the result holds `path`, `records`, `from_version` (null
-    for a pre-schema list), `steps` (such as "0.2.0→0.3.0") and `problems` (all found at once,
-    as `validate_ledger` reports them, empty if valid)."""
+    for a pre-schema list), `steps` (such as "0.2.0→0.3.0"), `review` and `problems` (all found
+    at once, as `validate_ledger` reports them, empty if valid). `review` lists records
+    whose meaning changed between versions and that were not relabelled: an import from before
+    0.5.2 lists each `contrasts` record, because `contrasts` now covers only passages that
+    conflict with the claim and one that only qualifies it is `partially_supports`. The list is
+    not stored and the new header is already current, so show it to the user and finish the review
+    before using the ledger; change a record only after its quote was checked. Withdrawn records
+    are listed for information; they cannot be changed."""
     return migrate.import_ledger(source, path, work)
 
 
@@ -106,7 +112,9 @@ def add_record(
 ) -> Record:
     """Append a record. The server assigns `id`, `claim_id` (unless given), `quote_hash` and the
     provenance date, validates the result and returns the stored record. Mark the phrase
-    carrying the claim (a number, term or short statement) with optional `quote_focus`. Source
+    carrying the claim (a number, term or short statement) with optional `quote_focus`. `relation`
+    is `contrasts` only for a passage that conflicts with the claim; one that only qualifies it
+    is `partially_supports`, with a `justification` naming the qualification. Source
     text belongs only in `quote`, `quote_prefix`, `quote_suffix` and `quote_focus`: write
     `justification`, `locator` (including a section heading) and `note` in your own words, since
     they are exported with masked and locator ledgers; a record that repeats 24 or more letters

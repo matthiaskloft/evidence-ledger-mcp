@@ -35,6 +35,7 @@ STYLE = """
   --el-accent: #8ab4e0; --el-hl: #22303f; --el-hl2: #2f4760; --el-panel: #202023;
   --el-quote: #29292c; --el-bad: #e58a78; --el-ok: #5cc489; --el-part: #e0b040;
 }
+html { background: var(--el-bg); }
 body { background: var(--el-bg); color: var(--el-fg); }
 body a { color: var(--el-accent); }
 mark.el-claim { background: var(--el-hl); color: inherit; border-radius: 2px; padding: 0 1px;

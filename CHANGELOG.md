@@ -4,6 +4,8 @@ Changes to the MCP server package `evidence-ledger-mcp`. Schema changes are rele
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-11-24
+
 ### Fixed
 
 - `embed_ledger`: the area around the text follows the output's light/dark theme when the work sets a background on `html`, as Pandoc's default standalone template does; it stayed light in dark mode (#64).

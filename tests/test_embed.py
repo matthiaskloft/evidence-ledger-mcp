@@ -154,6 +154,19 @@ def test_theme_is_owned_by_the_output(path: str) -> None:
         assert "background: var(--el-panel)" in html and "#1e2229" not in html
 
 
+def test_theme_covers_a_background_the_work_sets_on_html(path: str, tmp_path: Path) -> None:
+    add(path)
+    work_rule = "html { background-color: #fdfdfd; }"
+    work = tmp_path / "themed.html"
+    work.write_text(HTML.replace("</head>", f"<style>{work_rule}</style></head>"), "utf-8")
+    for layout in embed.LAYOUTS:
+        out = tmp_path / f"themed-{layout}.html"
+        embed.embed_ledger(path, str(work), str(out), layout=layout)
+        html = out.read_text("utf-8")
+        # Equal specificity, so the output's rule wins only when it comes later.
+        assert html.index(work_rule) < html.index("html { background: var(--el-bg); }")
+
+
 def test_both_views_and_a_switch(path: str) -> None:
     add(path)
     _, html = run(path)
